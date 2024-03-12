@@ -46,7 +46,7 @@ for (m in 1:M) {
 }
 
 # Put all into data for JAGS
-jags_data <- list(M = M, D = D, K = K, W = W)
+jags_data <- list(M = M, D = D, K = K, W = W, alpha = alpha)
 
 ################################################
 ### Load the model
@@ -113,16 +113,9 @@ inferred_z <- matrix(round(z_summ$median), nrow = max(z_summ$subject), ncol = ma
 
 # Calculate accuracy
 accuracy <- sum(actual_z == inferred_z) / length(actual_z)
-print(accuracy) # 0.107
-  # So low! Suggests that the topic assignments were inverted
-
-# Invert the inferred topic assignments
-inferred_z_inverted <- 3 - inferred_z
-
-# Recalculate accuracy with the inverted assignments
-accuracy_inverted <- sum(actual_z == inferred_z_inverted) / length(actual_z)
-print(accuracy_inverted)
-  # 0.8926 for the topic assignments seems quite good
+print(accuracy) # 0.8918
+  # Quite good
+  # Approach to invert assignments: inferred_z_inverted <- 3 - inferred_z
 
 
 
