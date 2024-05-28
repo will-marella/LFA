@@ -1,0 +1,255 @@
+import numpy as np
+from numpy.random import choice
+from scipy.optimize import linear_sum_assignment
+from scipy.stats import mode
+
+
+# Set random seed for reproducibility
+np.random.seed(42)
+
+### Normal data simulation -- will remove later ###
+
+# Parameters
+M = 50  # Number of subjects
+D = 10   # Number of diseases
+num_topics_sim = 2   # Number of topics
+alpha_sim = np.array([0.1, 0.1])  # Dirichlet hyperparameter
+
+# Topic loadings beta, rows correspond to topics and columns to diseases
+beta = np.array([[0.9]*5 + [0.1]*5,
+                 [0.1]*5 + [0.9]*5])
+
+# Simulate the topic weights for each subject
+theta = np.random.dirichlet(alpha_sim, M)
+
+# Simulate the observed diagnoses
+W = np.zeros((M, D), dtype=np.int32)
+for m in range(M):
+    for d in range(D):
+        # Assign topic based on theta
+        z_md = np.random.choice(num_topics_sim, p=theta[m])
+        # Sample diagnosis based on beta
+        W[m, d] = np.random.binomial(1, beta[z_md, d])
+        
+        
+        
+##################### Begin CGS Functions
+
+        
+def initialize(W, num_topics):
+    
+    # Initialize topic assignments z randomly
+    z = np.random.choice(num_topics, size=W.shape)
+    
+    # Initialize document-topic counts
+    n = np.zeros((W.shape[0], num_topics))
+    for s in range(W.shape[0]):
+        for j in range(W.shape[1]):
+            k = z[s, j]
+            n[s, k] += 1
+    
+    # Initialize beta
+    beta = np.random.uniform(0, 1, (num_topics, W.shape[1]))
+    
+    return z, n, beta
+
+def update_beta(W, z, num_topics):
+    counts = np.zeros((num_topics, W.shape[1]))
+
+    for k in range(num_topics):
+        # Filter W where the topic assignment z equals k
+        indices = np.where(z == k)[0]
+        filtered_W = W[indices, :]  # Ensure this slices as a matrix
+        counts[k] = filtered_W.sum(axis=0)
+
+    total_counts = counts.sum(axis=1)
+    subject_counts = np.array([len(np.where(z == k)[0]) for k in range(num_topics)])
+
+
+    # Handle division by zero and update beta
+    beta = np.zeros_like(counts)
+    for k in range(num_topics):
+        if total_counts[k] == 0:
+            beta[k] = np.ones(W.shape[1]) * 0.1  # Handling division by zero with a default small number
+        else:
+            beta[k] = counts[k] / subject_counts[k]
+
+    return beta
+
+
+def compute_conditional(s, j, W, n, alpha, beta):
+    w_sj = W[s, j]  # Diagnosis indicator for subject s and disease j
+
+    # Vectorized computation for each topic
+    p = (beta[:, j]**w_sj * (1 - beta[:, j])**(1 - w_sj)) * (alpha + n[s, :])
+
+    # Normalize to get a valid probability distribution
+    p /= p.sum()
+    return p
+
+
+def run_chain(W, num_iterations, alpha, beta_initial, burn_in):
+    num_topics = beta_initial.shape[0]
+    z, n, beta = initialize(W, num_topics)
+    
+    z_samples = []
+    beta_samples = []
+    theta_samples = []
+
+    for iter_num in range(num_iterations):
+        for s in range(W.shape[0]):
+            for j in range(W.shape[1]):
+                k_old = z[s, j]
+                n[s, k_old] -= 1
+
+                p = compute_conditional(s, j, W, n, alpha, beta)
+                k_new = choice(np.arange(num_topics), p=p)
+                z[s, j] = k_new
+                n[s, k_new] += 1
+
+        beta = update_beta(W, z, num_topics)
+
+        if iter_num >= burn_in:
+            z_samples.append(z.copy())
+            beta_samples.append(beta.copy()) 
+            theta_samples.append(update_theta(n, alpha))
+
+    return z_samples, n, beta_samples, theta_samples
+
+def collapsed_gibbs_sampling(W, num_iterations, alpha, num_topics, burn_in, n_chains):
+    results = []
+    for chain in range(n_chains):
+        np.random.seed(chain)  # Set a different seed for each chain
+        beta_initial = np.random.uniform(0, 1, (num_topics, W.shape[1]))
+        z_samples, n_samples, beta_samples, theta_samples = run_chain(W, num_iterations, alpha, beta_initial, burn_in)
+        results.append((z_samples, n_samples, beta_samples, theta_samples))
+        # print(f"Final z Estimates for Chain {chain}:")
+        # print(f"The len is {len(z_samples)}:")
+        # print(z_samples[-1])
+        
+    return results
+
+def update_theta(n, alpha):
+   
+   # Sum over topics to get total counts per subject
+    total_counts_per_subject = n.sum(axis=1) + alpha.sum()
+    
+    # Add alpha to counts and normalize by total counts per subject
+    theta = (n + alpha) / total_counts_per_subject[:, None]  # Using broadcasting
+    
+    return theta
+
+def calculate_correlation(beta1, beta2):
+    
+    # Calculate the correlation matrix between two sets of beta distributions
+    correlation_matrix = np.corrcoef(beta1, beta2)[:len(beta1), len(beta1):]
+    
+    return 1 - correlation_matrix  # Convert to distance matrix for alignment
+
+def align_topics_via_correlation(correlation_matrix):
+    
+    # Use the Hungarian algorithm to find the best alignment based on correlation
+    row_ind, col_ind = linear_sum_assignment(correlation_matrix)
+    
+    return row_ind, col_ind
+
+def align_chains(results):
+    num_chains = len(results)
+    reference_chain_index = 0  # Typically, choose a well-performing or the first chain as reference
+    reference_beta = results[reference_chain_index][2][-1]  # Last beta_samples from the reference chain
+
+    aligned_results = []
+
+    for i in range(num_chains):
+        if i == reference_chain_index:
+            aligned_results.append({
+                'beta': results[i][2][-1],
+                'z': results[i][0][-1],
+                'theta': results[i][3][-1]
+            })  # Append reference output directly
+            continue
+
+        current_beta = results[i][2][-1]  # Last beta_samples of the current chain
+        correlation_matrix = calculate_correlation(reference_beta, current_beta)
+        _, col_ind = align_topics_via_correlation(correlation_matrix)
+
+        # Align beta matrices
+        aligned_beta = current_beta[col_ind, :]
+
+        # Correctly align z matrix
+        current_z = results[i][0][-1]
+        aligned_z = np.array([col_ind[z] for z in current_z])  # Reassign topics based on col_ind
+
+        # Correctly align theta if necessary
+        aligned_theta = results[i][3][-1]  # Assuming theta doesn't need realignment here
+
+        # Construct the aligned result for the current chain
+        aligned_result = {
+            'beta': aligned_beta,
+            'z': aligned_z,
+            'theta': aligned_theta
+        }
+        aligned_results.append(aligned_result)
+
+    return aligned_results
+
+
+def combine_z(aligned_results):
+    
+    # Check if all z matrices have the same shape
+    shapes = [res['z'].shape for res in aligned_results]
+    if len(set(shapes)) > 1:
+        raise ValueError("Not all input arrays have the same shape: {}".format(shapes))
+    
+    stacked_z = np.stack([res['z'] for res in aligned_results], axis=-1)
+    mode_z, _ = mode(stacked_z, axis=-1)
+    
+    return mode_z.squeeze()
+
+
+def merge_chains(aligned_results, W, num_topics):
+    
+    combined_result = {}
+    
+    combined_z = combine_z(aligned_results)
+    
+    combined_beta = update_beta(W, combined_z, num_topics)
+    
+    # Prepare n for theta update, derived from combined z
+    n = np.zeros((W.shape[0], num_topics))
+    for s in range(W.shape[0]):
+        for j in range(W.shape[1]):
+            topic = combined_z[s, j]
+            n[s, topic] += 1
+            
+    # Update theta using n and alpha
+    combined_theta = update_theta(n, alpha)
+    
+    # Store results in a dictionary
+    combined_result['z'] = combined_z
+    combined_result['beta'] = combined_beta
+    combined_result['theta'] = combined_theta
+    
+    return combined_result
+
+
+def perform_cgs(W, alpha, num_topics, burn_in, num_iterations, num_chains):
+    
+    # Running the multi-chain Gibbs sampler
+    results = collapsed_gibbs_sampling(W, num_iterations, alpha, num_topics, burn_in, num_chains)
+
+    aligned_results = align_chains(results)
+
+    combined_result = merge_chains(aligned_results, W, num_topics)
+    
+    return combined_result
+
+# Parameters for the simulation
+num_chains = 4  # For example, running 5 independent chains
+num_iterations = 60  # Total iterations
+burn_in = 50  # Burn-in iterations
+alpha = np.array([1, 1])
+num_topics = 2
+
+combined_result = perform_cgs(W, alpha, num_topics, burn_in, num_iterations, num_chains)
+print(combined_result['beta'])
