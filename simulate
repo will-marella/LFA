@@ -1,0 +1,83 @@
+# Data simulation
+
+import numpy as np
+import os
+import pandas as pd
+
+# Set fixed parameters
+D = 20   # Number of diseases
+K = 4   # Number of topics
+beta = np.array([
+    [0.9] * 5 + [0.1] * 15,  # Topic 1
+    [0.1] * 5 + [0.9] * 5 + [0.1] * 10,  # Topic 2
+    [0.1] * 10 + [0.9] * 5 + [0.1] * 5,  # Topic 3
+    [0.1] * 15 + [0.9] * 5   # Topic 4
+])
+
+def simulate_data(M, alpha, seed):
+    
+    # Set random seed for reproducibility
+    np.random.seed(seed)
+    
+    # Simulate the topic weights for each subject
+    theta = np.random.dirichlet(alpha, M)
+    
+    # Initialize W 
+    W = np.zeros((M, D), dtype=np.int32)
+
+    # Simulate the observed diagnoses
+    for m in range(M):
+        for d in range(D):
+            # Assign topic based on theta
+            z_md = np.random.choice(K, p=theta[m])
+            # Sample diagnosis based on beta
+            W[m, d] = np.random.binomial(1, beta[z_md, d])
+            
+    return W
+
+
+# Function to simulate 20 datasets with varying seeds
+def simulate_multiple_datasets(M, alpha):
+    datasets = []
+    for seed in range(20):  # Simulate 20 datasets with different seeds
+        datasets.append(simulate_data(M, alpha, seed))
+    return datasets
+
+# Define different configurations for M and alpha
+configurations = [
+    {"M": 2500, "alpha": np.array([1, 1, 1, 1])},  # Set 1
+    {"M": 5000, "alpha": np.array([1, 1, 1, 1])},  # Set 2
+    {"M": 300, "alpha": np.array([0.1, 0.1, 0.1, 0.1])},  # Set 3
+    {"M": 1000, "alpha": np.array([0.1, 0.1, 0.1, 0.1])}  # Set 4
+]
+
+# Simulate and store the 4 sets of 20 datasets
+all_datasets = {}
+for i, config in enumerate(configurations):
+    all_datasets[f"Set_{i+1}"] = simulate_multiple_datasets(config["M"], config["alpha"])
+    
+    
+# Create a base directory to store the datasets
+base_dir = "simulated_datasets"
+
+# Ensure the base directory exists
+os.makedirs(base_dir, exist_ok=True)
+
+# Save each set of datasets in a separate subfolder
+for set_name, datasets in all_datasets.items():
+    # Create a subfolder for each set
+    set_dir = os.path.join(base_dir, set_name)
+    os.makedirs(set_dir, exist_ok=True)
+
+    # Save each dataset within the subfolder with a unique name
+    for idx, dataset in enumerate(datasets):
+        # Convert the numpy array to a pandas DataFrame
+        df = pd.DataFrame(dataset)
+
+        # Define the filename for this dataset
+        filename = os.path.join(set_dir, f"{set_name}_dataset_{idx + 1}.csv")
+
+        # Save the DataFrame to a CSV file
+        df.to_csv(filename, index=False)
+
+        print(f"Saved {filename}")  # Feedback to confirm the file was saved
