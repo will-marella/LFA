@@ -1,0 +1,376 @@
+# Simulated dataset -- LFA via MFVI
+
+import numpy as np
+from scipy.special import digamma, gammaln
+from scipy.stats import pearsonr
+from scipy.optimize import linear_sum_assignment
+import matplotlib.pyplot as plt
+import seaborn as sns
+np.euler_gamma  # Euler-Mascheroni constant
+import time
+
+
+def simulate_disease_data(seed, M, D, num_topics, signal_strength='high', noise_level='none', sparsity='none', topic_concentration='low'):
+    
+    np.random.seed(seed)
+    
+    # Define parameters based on input
+    signal_strength_map = {'high': (0.9, 0.1), 'medium': (0.75, 0.25), 'low': (0.6, 0.4)}
+    noise_level_map = {'none': 0, 'low': 20, 'high': 40}
+    sparsity_map = {'none': 1, 'medium': 2, 'high': 4}
+    topic_concentration_map = {'very_low': 0.1, 'low': 0.2, 'medium': 0.5, 'high': 1}
+
+    high_prob, low_prob = signal_strength_map[signal_strength]
+    extra_diseases = noise_level_map[noise_level]
+    sparsity_factor = sparsity_map[sparsity]
+    alpha_value = topic_concentration_map[topic_concentration]
+
+    # Adjust D to include noise diseases
+    D_total = D + extra_diseases
+
+    # Create beta matrix
+    diseases_per_topic = D // num_topics
+    beta = np.full((num_topics, D_total), low_prob)
+    for i in range(num_topics):
+        start = i * diseases_per_topic
+        end = start + diseases_per_topic
+        beta[i, start:end] = high_prob
+
+    # Apply sparsity
+    beta /= sparsity_factor
+
+    # Create alpha
+    alpha = np.full(num_topics, alpha_value)
+
+    # Simulate the topic weights for each subject
+    theta = np.random.dirichlet(alpha, M)
+
+    # Simulate the observed diagnoses
+    W = np.zeros((M, D_total), dtype=np.int32)
+    for m in range(M):
+        for d in range(D_total):
+            # Topic assignment sampled from theta
+            z_md = np.random.choice(num_topics, p=theta[m])
+            # Diagnosis sampled from beta
+            W[m, d] = np.random.binomial(1, beta[z_md, d])
+
+    return W, theta, beta
+
+# Example usage:
+M = 5000  # Number of subjects
+D = 20   # Number of diseases (without noise)
+num_topics = 4
+
+W, theta, beta = simulate_disease_data(42, 
+    M, D, num_topics,
+    signal_strength='high',
+    noise_level='none',
+    sparsity='none',
+    topic_concentration='very_low'
+)
+
+
+
+## Run the algorithm
+
+def initialize_parameters(M, D, K, alpha_init=1):
+    
+    np.random.seed(42)
+    
+    alpha = np.full(K, alpha_init)
+    beta_init = 0.5 + (np.random.rand(K, D) - 0.5) * 0.1  # Small perturbation around 0.5
+    z = 1/K + (np.random.rand(M, D, K) - 0.5) * 0.1  # Small perturbation around 1/K
+    z_init = z / np.sum(z, axis=2, keepdims=True) 
+    
+    params = {
+        'alpha': alpha,
+        'beta_init': beta_init,
+        'z_init': z_init,
+    }
+    
+    return params
+
+
+def E_step(W, alpha, beta, z, epsilon=1e-15):
+    
+
+    # Calculation of expected theta values (e_theta) using broadcasting
+    e_theta = alpha + np.sum(z, axis=1)
+    
+    # # Assessing the values that may be troubling the digamma function
+    # log_value_range(e_theta, "e_theta for digamma")
+    # log_value_range(np.sum(e_theta, axis=1, keepdims=True), "Sum of e_theta for digamma")
+
+    # Calculate the expected log theta values (e_log_theta)
+    e_log_theta = digamma(e_theta) - digamma(np.sum(e_theta, axis=1, keepdims=True))
+
+    # Stabilize beta values and calculate log probabilities for diseases given topics
+    beta_safe = np.clip(beta, epsilon, 1 - epsilon)
+    log_beta = np.log(beta_safe).T[np.newaxis, :, :]  # Log of beta
+    log_one_minus_beta = np.log(1 - beta_safe).T[np.newaxis, :, :]  # Log of 1-beta
+    W_broadcasted = W[:, :, np.newaxis]  # Correctly shape (M, D, 1)
+    log_prob_diseases_given_topics = (W_broadcasted * log_beta) + ((1 - W_broadcasted) * log_one_minus_beta)
+
+    # Update E[z] using log-sum-exp trick for numerical stability
+    e_log_theta_broadcasted = e_log_theta[:, np.newaxis, :]  # Add a new axis (M, 1, K)
+    log_numerator = e_log_theta_broadcasted + log_prob_diseases_given_topics
+    log_denominator = np.logaddexp.reduce(log_numerator, axis=2, keepdims=True)
+    log_e_z = log_numerator - log_denominator
+    e_z = np.exp(log_e_z)
+    
+    return e_theta, e_log_theta, e_z
+
+
+
+
+def M_step(W, z, epsilon=1e-15):
+
+    # Multiply the current expectation of z by W, sum over subjects (axis 0)
+    numerator = np.sum(z * W[:, :, np.newaxis], axis=0)
+    
+    # Sum the current expectation of z over subjects (axis 0)
+    denominator = np.sum(z, axis=0)
+
+    safe_denominator = denominator + epsilon * z.shape[2]  # Multiply epsilon by the number of topics for balance
+    safe_numerator = numerator + epsilon
+
+    # Calculate the new beta values
+    updated_beta = (safe_numerator / safe_denominator).T  # Transpose to match expected dimension (topics x diseases)
+    
+    return updated_beta
+
+
+
+def isConverged(all_beta_samples, all_theta_samples, window_size=40, threshold=1.5, 
+                beta_convergence_percentage=0.90, theta_convergence_percentage=0.80):
+    
+    window_size = int(window_size)
+    
+    if len(all_beta_samples) < window_size:
+        return False
+    
+    beta_recent = np.array(all_beta_samples[-window_size:])
+    theta_recent = np.array(all_theta_samples[-window_size:])
+    
+    def check_convergence(data):
+        first_half = data[:window_size//2]
+        second_half = data[window_size//2:]
+        mean_first = np.mean(first_half, axis=0)
+        mean_second = np.mean(second_half, axis=0)
+        variance_first = np.var(first_half, axis=0)
+        variance_second = np.var(second_half, axis=0)
+        
+        # Avoid division by zero
+        with np.errstate(divide='ignore', invalid='ignore'):
+            mvRatio_first = np.where(variance_first != 0, mean_first / variance_first, 1.0)
+            mvRatio_second = np.where(variance_second != 0, mean_second / variance_second, 1.0)
+            ratio = np.where(mvRatio_second != 0, mvRatio_first / mvRatio_second, 1.0)
+        
+        return np.isfinite(ratio) & (ratio < threshold) & (ratio > 1/threshold)
+
+    beta_converged = check_convergence(beta_recent)
+    theta_converged = check_convergence(theta_recent)
+    
+    beta_convergence_rate = np.sum(beta_converged) / beta_converged.size
+    theta_convergence_rate = np.sum(theta_converged) / theta_converged.size
+    
+    beta_converged = beta_convergence_rate >= beta_convergence_percentage
+    theta_converged = theta_convergence_rate >= theta_convergence_percentage
+    
+    return beta_converged and theta_converged
+
+def perform_mfvi(W, alpha, num_topics, max_iterations, window_size=40, threshold=1.5, 
+                beta_convergence_percentage=0.90, theta_convergence_percentage=0.80):
+    
+    start_time = time.time()
+    
+    # Initialize parameters
+    params = initialize_parameters(W.shape[0], W.shape[1], num_topics, alpha_init=alpha)
+    
+    # Extract initialized values from params
+    beta = params['beta_init']
+    z = params['z_init']
+    
+    
+    all_beta_samples = []
+    all_theta_samples = []
+    converged = False
+
+    # Begin iterative process
+    for iteration in range(max_iterations):
+        print(f'\nIteration {iteration}')
+        
+        e_theta, e_log_theta, z = E_step(W, alpha, beta, z)
+        beta = M_step(W, z)
+        e_theta_normalized = e_theta / np.sum(e_theta, axis=1, keepdims=True)
+        
+        all_beta_samples.append(beta.copy())
+        all_theta_samples.append(e_theta_normalized.copy())
+        
+        if not converged and iteration >= window_size - 1:
+            if isConverged(all_beta_samples, all_theta_samples, window_size, threshold, 
+                           beta_convergence_percentage, theta_convergence_percentage):
+                converged = True
+                print(f"Converged at iteration {iteration}")
+                break
+            
+    end_time = time.time()  # End timing
+    run_time = end_time - start_time  # Calculate run time
+
+    # Preparing the result in a similar format to perform_cgs()
+    combined_result = {
+        'beta': beta,
+        'z': z,  # Note: z here represents expected assignments, not hard assignments
+        'theta': e_theta_normalized,
+        'num_iterations': iteration + 1,
+        'run_time': run_time
+    }
+    
+    return combined_result
+
+def calculate_correlation(beta1, beta2):
+    # Add a small noise to avoid division by zero in std computation
+    noise = np.random.normal(0, 0.001, beta1.shape)
+    beta1_noisy = beta1 + noise
+    beta2_noisy = beta2 + noise
+    
+    correlation_matrix = np.corrcoef(beta1_noisy, beta2_noisy)
+    return correlation_matrix[:beta1.shape[0], beta1.shape[0]:]  # Ensure proper slicing
+
+def align_topics_via_correlation(correlation_matrix):
+    # Convert correlation to cost
+    cost_matrix = 1 - correlation_matrix  # Higher correlation should mean lower cost
+    # Use the Hungarian algorithm to find the best alignment based on correlation
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    return row_ind, col_ind
+
+def align_topics(beta_estimated, beta_simulated, theta_estimated, theta_simulated):
+    # Calculate the correlation matrix based on beta matrices
+    correlation_matrix = calculate_correlation(beta_estimated, beta_simulated)
+
+    # Align beta_estimated to beta_simulated using the Hungarian algorithm
+    row_ind, col_ind = align_topics_via_correlation(correlation_matrix)
+    
+    # Reorder the estimated beta and theta matrices according to the optimal alignment
+    aligned_beta_estimated = beta_estimated[col_ind, :]
+    aligned_theta_estimated = theta_estimated[:, col_ind]
+    
+    return aligned_beta_estimated, beta_simulated, aligned_theta_estimated, theta_simulated
+
+def mae(estimated, true):
+    
+    mae = np.mean(np.abs(estimated - true))
+       
+    return mae
+
+def pearson_correlation(estimated, true):
+    
+    # Flatten arrays to make them 1D for correlation computation
+    estimated_flat = estimated.flatten()
+    true_flat = true.flatten()
+    correlation, _ = pearsonr(estimated_flat, true_flat)
+    
+    return correlation
+
+def compute_metrics(aligned_beta_estimated, aligned_beta_true, aligned_theta_estimated, aligned_theta_true):
+    beta_mae_value = mae(aligned_beta_estimated, aligned_beta_true)
+    beta_pearson_corr = pearson_correlation(aligned_beta_estimated, aligned_beta_true)
+    
+    theta_mae_value = mae(aligned_theta_estimated, aligned_theta_true)
+    theta_pearson_corr = pearson_correlation(aligned_theta_estimated, aligned_theta_true)
+    
+    return beta_mae_value, beta_pearson_corr, theta_mae_value, theta_pearson_corr
+
+
+def beta_heatmap(aligned_beta_estimated):
+
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(aligned_beta_estimated, annot=True, fmt=".2f", cmap='binary', cbar=True)
+    plt.title('Heatmap of Aligned Beta Matrix from MFVI')
+    plt.xlabel('Diseases')
+    plt.ylabel('Topics')
+    plt.show()
+    
+    return
+
+def process_results(result, simulated_beta, simulated_theta):
+    estimated_beta = result['beta']
+    theta_estimated = result['theta']
+    
+    # Align the beta matrices
+    aligned_beta_estimated, aligned_beta_true, aligned_theta_estimated, aligned_theta_true = align_topics(estimated_beta, simulated_beta, theta_estimated, simulated_theta)
+
+    # Compute metrics
+    beta_mae_value, beta_pearson_corr, theta_mae_value, theta_pearson_corr = compute_metrics(aligned_beta_estimated, aligned_beta_true, aligned_theta_estimated, aligned_theta_true)
+
+    # Add these metrics to the result dictionary
+    result['metrics'] = {
+        'beta_mae': beta_mae_value,
+        'beta_pearson_corr': beta_pearson_corr,
+        'theta_mae': theta_mae_value,
+        'theta_pearson_corr': theta_pearson_corr,
+        'aligned_beta_estimated': aligned_beta_estimated,
+        'run_time': result['run_time']
+    }
+
+    return result
+
+def print_metrics(result):
+    metrics = result['metrics']
+    print("MAE between aligned beta matrices:", metrics['beta_mae'])
+    print("Pearson correlation between aligned beta matrices:", metrics['beta_pearson_corr'])
+    print("MAE between aligned theta matrices:", metrics['theta_mae'])
+    print("Pearson correlation between aligned theta matrices:", metrics['theta_pearson_corr'])
+    print("Number of iterations:", result['num_iterations'])
+    print("Run time (seconds):", metrics['run_time'])
+    
+    
+def run_mfvi_experiment(W, simulated_beta, simulated_theta, alpha, num_topics, max_iterations, 
+                        window_size=40, threshold=1.5, 
+                        beta_convergence_percentage=0.90, theta_convergence_percentage=0.80):
+    
+    # Run MFVI
+    mfvi_result = perform_mfvi(W, alpha, num_topics, max_iterations, window_size, threshold, 
+                               beta_convergence_percentage, theta_convergence_percentage)
+    
+    # Process results
+    final_result = process_results(mfvi_result, simulated_beta, simulated_theta)
+    
+    # Add experiment parameters to the result dictionary
+    final_result['parameters'] = {
+        'num_topics': num_topics,
+        'max_iterations': max_iterations,
+        'window_size': window_size,
+        'threshold': threshold,
+        'beta_convergence_percentage': beta_convergence_percentage,
+        'theta_convergence_percentage': theta_convergence_percentage,
+        'alpha': alpha
+    }
+    
+    return final_result
+
+
+
+# Initialize parameters
+num_topics = 4
+alpha = np.ones(num_topics) / 10
+
+# Set max iterations
+max_iterations = 10000
+window_size = 40
+threshold = 10
+beta_convergence_percentage = 0.90
+theta_convergence_percentage = 0.80
+
+# Perform MFVI
+result = run_mfvi_experiment(W, beta, theta, alpha, num_topics, max_iterations)
+
+# Print out the results
+print("Aligned Estimated Beta Matrix:\n", result['metrics']['aligned_beta_estimated'])
+print_metrics(result)
+beta_heatmap(result['metrics']['aligned_beta_estimated'])
+
+
+
+
+

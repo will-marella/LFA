@@ -1,0 +1,525 @@
+import numpy as np
+from numpy.random import choice
+from scipy.optimize import linear_sum_assignment
+import matplotlib.pyplot as plt
+from scipy.stats import pearsonr
+from tqdm import tqdm
+import time
+import seaborn as sns
+
+
+# Simple Parameters
+# M = 200  # Number of subjects
+# D = 10
+# num_topics_sim = 2
+# alpha_sim = np.ones(num_topics_sim) / 2
+# beta = np.array([[0.3]*5 + [0.0]*5,
+#                  [0.0]*5 + [0.3]*5])
+# beta = np.array([[0.5]*5 + [0.5]*5,
+#                  [0.5]*5 + [0.5]*5])
+
+
+# More complicated parameters
+M = 100  # Number of subjects
+D = 20   # Number of diseases
+num_topics_sim = 4   # Number of topics
+alpha_sim = np.ones(num_topics_sim) / 10
+beta = np.array([
+    [0.9] * 5 + [0.1] * 15,  # Topic 1
+    [0.1] * 5 + [0.9] * 5 + [0.1] * 10,  # Topic 2
+    [0.1] * 10 + [0.9] * 5 + [0.1] * 5,  # Topic 3
+    [0.1] * 15 + [0.9] * 5   # Topic 4
+])
+# beta = np.array([
+#     [0.8] * 5 + [0.2] * 15,  # Topic 1
+#     [0.2] * 5 + [0.8] * 5 + [0.2] * 10,  # Topic 2
+#     [0.2] * 10 + [0.8] * 5 + [0.2] * 5,  # Topic 3
+#     [0.2] * 15 + [0.8] * 5   # Topic 4
+# ])
+# beta = np.array([
+#     [0.7] * 5 + [0.3] * 15,  # Topic 1
+#     [0.3] * 5 + [0.7] * 5 + [0.3] * 10,  # Topic 2
+#     [0.3] * 10 + [0.7] * 5 + [0.3] * 5,  # Topic 3
+#     [0.3] * 15 + [0.7] * 5   # Topic 4
+# ])
+# beta = np.array([
+#     [0.75] * 5 + [0.25] * 15,  # Topic 1
+#     [0.25] * 5 + [0.75] * 5 + [0.25] * 10,  # Topic 2
+#     [0.25] * 10 + [0.75] * 5 + [0.25] * 5,  # Topic 3
+#     [0.25] * 15 + [0.75] * 5   # Topic 4
+# ])
+# beta = np.array([
+#     [0.6] * 5 + [0.4] * 15,  # Topic 1
+#     [0.4] * 5 + [0.6] * 5 + [0.4] * 10,  # Topic 2
+#     [0.4] * 10 + [0.6] * 5 + [0.4] * 5,  # Topic 3
+#     [0.4] * 15 + [0.6] * 5   # Topic 4
+# ])
+# beta = np.array([
+#     [0.5] * 20,  # Topic 1
+#     [0.5] * 20,  # Topic 2
+#     [0.5] * 20,  # Topic 3
+#     [0.5] * 20   # Topic 4
+# ])
+
+
+
+
+
+## Simulation
+# Simulate the topic weights for each subject
+theta = np.random.dirichlet(alpha_sim, M)
+
+# Simulate the observed diagnoses
+W = np.zeros((M, D), dtype=np.int32)
+for m in range(M):
+    for d in range(D):
+        # Assign topic based on theta
+        z_md = np.random.choice(num_topics_sim, p=theta[m])
+        # Sample diagnosis based on beta
+        W[m, d] = np.random.binomial(1, beta[z_md, d])
+        
+        
+        
+##################### Begin CGS Functions
+
+
+def initialize(W, num_topics):
+    # Initialize topic assignments z randomly
+    z = np.random.choice(num_topics, size=W.shape)
+
+    # Initialize document-topic counts
+    n = np.zeros((W.shape[0], num_topics), dtype=int)
+    for s in range(W.shape[0]):
+        n[s] = np.bincount(z[s], minlength=num_topics)
+
+    return z, n
+
+
+def update_beta(W, z, num_topics):
+    counts = np.zeros((num_topics, W.shape[1]))
+
+    for k in range(num_topics):
+        # Filter W where the topic assignment z equals k
+        indices = np.where(z == k)[0]
+        filtered_W = W[indices, :]  # Ensure this slices as a matrix
+        counts[k] = filtered_W.sum(axis=0)
+
+    total_counts = counts.sum(axis=1)
+    subject_counts = np.array([len(np.where(z == k)[0]) for k in range(num_topics)])
+
+
+    # Handle division by zero and update beta
+    beta = np.zeros_like(counts)
+    for k in range(num_topics):
+        if total_counts[k] == 0:
+            beta[k] = np.ones(W.shape[1]) * 0.1  # Handling division by zero with a default small number
+        else:
+            beta[k] = counts[k] / subject_counts[k]
+
+    return beta
+
+def update_theta(n, alpha):
+   
+   # Sum over topics to get total counts per subject
+    total_counts_per_subject = n.sum(axis=1) + alpha.sum()
+    
+    # Add alpha to counts and normalize by total counts per subject
+    theta = (n + alpha) / total_counts_per_subject[:, None]  # Using broadcasting
+    
+    return theta
+
+
+def compute_conditional(s, j, W, n, alpha, beta):
+    w_sj = W[s, j]  # Diagnosis indicator for subject s and disease j
+
+    # Vectorized computation for each topic
+    p = (beta[:, j]**w_sj * (1 - beta[:, j])**(1 - w_sj)) * (alpha + n[s, :])
+
+    # Normalize to get a valid probability distribution
+    p /= p.sum()
+    return p
+
+def isConverged(all_beta_samples, all_theta_samples, window_size=40, threshold=1.1, 
+                beta_convergence_percentage=0.95, theta_convergence_percentage=0.80):
+    
+    window_size = int(window_size)
+    
+    if len(all_beta_samples) < window_size:
+        return False
+    
+    beta_recent = np.array(all_beta_samples[-window_size:])
+    theta_recent = np.array(all_theta_samples[-window_size:])
+    
+    def check_convergence(data):
+        first_half = data[:window_size//2]
+        second_half = data[window_size//2:]
+        mean_first = np.mean(first_half, axis=0)
+        mean_second = np.mean(second_half, axis=0)
+        variance_first = np.var(first_half, axis=0)
+        variance_second = np.var(second_half, axis=0)
+        
+        # Avoid division by zero
+        with np.errstate(divide='ignore', invalid='ignore'):
+            mvRatio_first = np.where(variance_first != 0, mean_first / variance_first, 1.0)
+            mvRatio_second = np.where(variance_second != 0, mean_second / variance_second, 1.0)
+            ratio = np.where(mvRatio_second != 0, mvRatio_first / mvRatio_second, 1.0)
+        
+        return np.isfinite(ratio) & (ratio < threshold) & (ratio > 1/threshold)
+
+    beta_converged = check_convergence(beta_recent)
+    theta_converged = check_convergence(theta_recent)
+    
+    beta_convergence_rate = np.sum(beta_converged) / beta_converged.size
+    theta_convergence_rate = np.sum(theta_converged) / theta_converged.size
+    
+    beta_converged = beta_convergence_rate >= beta_convergence_percentage
+    theta_converged = theta_convergence_rate >= theta_convergence_percentage
+    
+    return beta_converged and theta_converged
+
+
+def run_chain(W, alpha, num_topics, max_iterations=1000, window_size=40, threshold=1.1, beta_convergence_percentage=0.95, theta_convergence_percentage=0.95):
+
+    z, n = initialize(W, num_topics)
+    beta = update_beta(W, z, num_topics)
+
+    z_samples = []
+    beta_samples = []
+    theta_samples = []
+    
+    # Store samples for convergence check
+    all_beta_samples = []
+    all_theta_samples = []
+    
+    burn_in = max_iterations
+    converged = False
+    
+    window_size = int(window_size)
+
+    for iter_num in range(max_iterations + 50):
+        for s in range(W.shape[0]):
+            
+            beta = update_beta(W, z, num_topics)
+            
+            # Compute conditional probabilities for all diseases for subject s
+            p = np.array([compute_conditional(s, j, W, n, alpha, beta) for j in range(W.shape[1])])
+
+            for j in range(W.shape[1]):
+                k_old = z[s, j]
+                n[s, k_old] -= 1
+                k_new = choice(np.arange(num_topics), p=p[j])
+                z[s, j] = k_new
+                n[s, k_new] += 1
+                
+        current_theta = update_theta(n, alpha)
+        
+        all_beta_samples.append(beta.copy())
+        all_theta_samples.append(current_theta.copy())
+        
+        if not converged and iter_num >= window_size - 1:
+            if isConverged(all_beta_samples, all_theta_samples, window_size, threshold, 
+                           beta_convergence_percentage, theta_convergence_percentage):
+                burn_in = iter_num
+                converged = True
+                print(f"Converged at iteration {iter_num}")
+
+        if converged or iter_num == max_iterations:
+            z_samples.append(z.copy())
+            beta_samples.append(beta.copy())
+            theta_samples.append(current_theta.copy())
+
+            if len(z_samples) >= 50:
+                print(f"Collected 50 samples after convergence. Stopping at iteration {iter_num}")
+                break
+
+    return z_samples, n, beta_samples, theta_samples, burn_in
+
+
+def average_aligned_BetasAndThetas(aligned_results):
+    # Extract all aligned beta and theta matrices
+    all_aligned_beta = np.array([res['beta_samples'] for res in aligned_results])
+    all_aligned_theta = np.array([res['theta_samples'] for res in aligned_results])
+    
+    # print("all_aligned_beta:", all_aligned_beta)
+    
+    # print("Shape of all_aligned_beta:", all_aligned_beta.shape)
+    # print("Shape of all_aligned_theta:", all_aligned_theta.shape)
+
+    # Average beta and theta results across the chains
+    mean_beta = np.mean(all_aligned_beta, axis=(0, 1))  # Averaging over both chains and iterations
+    mean_theta = np.mean(all_aligned_theta, axis=(0, 1))  # Averaging over both chains and iterations
+    
+    # print("Shape of mean_beta:", mean_beta.shape)
+    # print("Shape of mean_theta:", mean_theta.shape)
+
+    return mean_beta, mean_theta
+
+
+
+def calculate_z_distribution(aligned_results):
+    
+    # Concatenate all z_samples across all chains
+    concatenated_z = np.concatenate([res['z_samples'] for res in aligned_results], axis=0)
+
+    # Calculate the frequency of each topic assignment for each subject-disease pair
+    M, D = concatenated_z[0].shape  # Assuming all z_samples have the same shape
+    num_topics = aligned_results[0]['beta_samples'][0].shape[0]  # Assuming shape consistency in beta samples
+
+    topic_counts = np.zeros((M, D, num_topics), dtype=int)
+
+    # Populate the count matrix
+    for sample in concatenated_z:
+        for m in range(M):
+            for d in range(D):
+                topic_counts[m, d, sample[m, d]] += 1
+
+    # Convert counts to probabilities
+    total_samples = len(concatenated_z)  # Now directly using the length of concatenated_z
+    z_distribution = topic_counts / total_samples
+
+    return z_distribution
+
+
+def collapsed_gibbs_sampling(W, alpha, num_topics, num_chains, max_iterations, window_size, threshold, beta_convergence_percentage, theta_convergence_percentage):
+    results = []
+
+    # Initialize a tqdm progress bar
+    with tqdm(total=num_chains, desc='Chains Completed') as pbar:
+        for chain in range(num_chains):
+            np.random.seed(chain)  # Set a different seed for each chain
+     
+            z_samples, n_samples, beta_samples, theta_samples, burn_in = run_chain(W, alpha, num_topics, max_iterations, window_size, threshold, beta_convergence_percentage, theta_convergence_percentage)
+            
+            results.append({
+                'z_samples': z_samples,
+                'n_samples': n_samples,
+                'beta_samples': beta_samples,
+                'theta_samples': theta_samples,
+                'burn_in': burn_in
+            })
+            
+            # Update the progress bar after each chain completes
+            pbar.update(1)
+
+    return results
+
+
+def calculate_correlation(beta1, beta2):
+    
+    # Calculate the correlation matrix between two sets of beta distributions
+    correlation_matrix = np.corrcoef(beta1, beta2)[:len(beta1), len(beta1):]
+    
+    return 1 - correlation_matrix  # Convert to distance matrix for alignment
+
+def align_topics_via_correlation(correlation_matrix):
+    
+    # Use the Hungarian algorithm to find the best alignment based on correlation
+    row_ind, col_ind = linear_sum_assignment(correlation_matrix)
+    
+    return row_ind, col_ind
+
+def align_chains(results):
+    num_chains = len(results)
+    reference_chain_index = 0  # Use the first chain as reference
+    reference_beta = np.mean(np.array(results[reference_chain_index]['beta_samples']), axis=0)
+
+    aligned_results = []
+
+    for i in range(num_chains):
+        if i == reference_chain_index:
+            aligned_results.append(results[i])  # Append reference output directly
+            continue
+
+        current_beta_avg = np.mean(np.array(results[i]['beta_samples']), axis=0)
+        correlation_matrix = calculate_correlation(reference_beta, current_beta_avg)
+
+        _, col_ind = align_topics_via_correlation(correlation_matrix)
+
+        aligned_beta_samples = [beta[col_ind, :] for beta in results[i]['beta_samples']]
+
+        # Correctly align z_samples
+        aligned_z_samples = []
+        for z_sample in results[i]['z_samples']:
+            aligned_z = np.array([[col_ind[z] for z in row] for row in z_sample])
+            aligned_z_samples.append(aligned_z)
+
+        aligned_results.append({
+            'beta_samples': aligned_beta_samples,
+            'z_samples': aligned_z_samples,
+            'theta_samples': results[i]['theta_samples']
+        })
+
+    return aligned_results
+
+
+
+def merge_chains(aligned_results):
+    # Calculate z distribution from the aligned results
+    z_distribution = calculate_z_distribution(aligned_results)
+
+    # Calculate averaged beta and theta from aligned results
+    mean_beta, mean_theta = average_aligned_BetasAndThetas(aligned_results)
+
+    combined_result = {
+        'z_distribution': z_distribution,
+        'beta': mean_beta,
+        'theta': mean_theta
+    }
+
+    return combined_result
+
+
+def calculate_correlation_2(beta1, beta2):
+    # Transpose beta matrices to correlate topics (rows) instead of diseases (columns)
+    correlation_matrix = np.corrcoef(beta1, beta2)[:len(beta1), len(beta1):]
+    return correlation_matrix
+
+def align_to_simulated_topics(combined_result, simulated_beta):
+    
+    estimated_beta = combined_result['beta']
+    
+    # Calculate the correlation matrix
+    correlation_matrix = calculate_correlation_2(estimated_beta, simulated_beta)
+    cost_matrix = -correlation_matrix
+
+    # Align estimated_beta to simulated_beta using the Hungarian algorithm
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    
+    # Create the topic mapping
+    topic_mapping = {est: sim for est, sim in zip(row_ind, col_ind)}
+    
+    # Create a reverse mapping to reorder the matrices
+    reorder_mapping = {sim: est for est, sim in topic_mapping.items()}
+    reorder_indices = [reorder_mapping[i] for i in range(len(reorder_mapping))]
+    
+    # Reorder the matrices
+    combined_result['beta'] = combined_result['beta'][reorder_indices, :]
+    combined_result['theta'] = combined_result['theta'][:, reorder_indices] 
+    combined_result['z_distribution'] = combined_result['z_distribution'][:, :, reorder_indices]
+
+    return combined_result
+
+def mae(estimated, true):
+    
+    mae = np.mean(np.abs(estimated - true))
+       
+    return mae
+
+def pearson_correlation(estimated, true):
+    
+    # Flatten arrays to make them 1D for correlation computation
+    estimated_flat = estimated.flatten()
+    true_flat = true.flatten()
+    correlation, _ = pearsonr(estimated_flat, true_flat)
+    
+    return correlation
+
+def compute_cgs_metrics(combined_result, simulated_beta, simulated_theta):
+    estimated_beta = combined_result['beta']
+    estimated_theta = combined_result['theta']
+
+    beta_mae_value = mae(estimated_beta, simulated_beta)
+    beta_pearson_corr = pearson_correlation(estimated_beta, simulated_beta)
+    
+    theta_mae_value = mae(estimated_theta, simulated_theta)
+    theta_pearson_corr = pearson_correlation(estimated_theta, simulated_theta)
+
+    metrics = {
+        'beta_mae': beta_mae_value,
+        'beta_pearson_corr': beta_pearson_corr,
+        'theta_mae': theta_mae_value,
+        'theta_pearson_corr': theta_pearson_corr
+    }
+
+    return metrics
+
+def print_metrics(metrics):
+    
+    print("MAE between aligned beta matrices:", metrics['beta_mae'])
+    print("Pearson correlation between aligned beta matrices:", metrics['beta_pearson_corr'])
+    print("MAE between aligned theta matrices:", metrics['theta_mae'])
+    print("Pearson correlation between aligned theta matrices:", metrics['theta_pearson_corr'])
+    print(" Average burn-in length:", metrics['avg_burn_in'], "iterations")
+    print(" Run-time:", metrics['run_time'], "seconds")
+    
+    return
+
+
+def run_cgs_experiment(W, alpha, num_topics, num_chains, max_iterations, beta, theta, window_size, threshold, beta_convergence_percentage, theta_convergence_percentage):
+   
+    start_time = time.time()
+    
+    results = collapsed_gibbs_sampling(W, alpha, num_topics, num_chains, max_iterations, window_size, threshold, beta_convergence_percentage, theta_convergence_percentage)
+
+    end_time = time.time()
+    run_time = end_time - start_time
+    
+    aligned_results = align_chains(results)
+
+    combined_result = merge_chains(aligned_results)
+    
+    combined_result = align_to_simulated_topics(combined_result, beta)
+    
+    metrics = compute_cgs_metrics(combined_result, beta, theta)
+    
+    # Calculate average burn-in across chains
+    avg_burn_in = np.mean([res['burn_in'] for res in results])
+    metrics['avg_burn_in'] = avg_burn_in
+    metrics['run_time'] = run_time
+    
+    # Add experiment parameters to the result dictionary
+    combined_result['parameters'] = {
+        'num_topics': num_topics,
+        'max_iterations': max_iterations,
+        'window_size': window_size,
+        'threshold': threshold,
+        'beta_convergence_percentage': beta_convergence_percentage,
+        'theta_convergence_percentage': theta_convergence_percentage,
+        'alpha': alpha
+    }
+    
+    return combined_result, metrics
+
+# # Simple parameters for simulation
+# num_chains = 4  # For example, running 5 independent chains
+# num_iterations = 100  # Total iterations
+# burn_in = 80  # Burn-in iterations
+# num_topics = 2
+# alpha = np.ones(num_topics) / 10
+
+# combined_result = perform_cgs(W, alpha, num_topics, burn_in, num_iterations, num_chains)
+# print(combined_result['beta'])
+
+# z = np.random.choice(num_topics_sim, size=W.shape)
+
+# # Call the updated beta function
+# updated_beta = update_beta(W, z, num_topics_sim)
+# print("Updated Beta Matrix:")
+# print(updated_beta)
+
+# More complicated parameters for simulation
+num_chains = 4 
+num_topics = 4
+alpha = np.ones(num_topics) / 10
+max_iterations = 1000
+window_size = 40
+threshold = 10
+beta_convergence_percentage = 0.90
+theta_convergence_percentage = 0.80
+
+combined_result, metrics = run_cgs_experiment(W, alpha, num_topics, num_chains, max_iterations, beta, theta, window_size, threshold, beta_convergence_percentage, theta_convergence_percentage)
+print(combined_result['beta'])
+# print(combined_result['z_distribution'])
+
+# Extract the beta matrix from results
+beta_matrix = combined_result['beta']
+
+print_metrics(metrics)
+
+# Plotting the heatmap
+plt.figure(figsize=(10, 8)) # or 10, 8 for other dataset
+sns.heatmap(beta_matrix, annot=True, fmt=".2f", cmap='binary', cbar=True)
+plt.title('Heatmap of Beta Matrix from CGS')
+plt.xlabel('Diseases')
+plt.ylabel('Topics')
+plt.show()
