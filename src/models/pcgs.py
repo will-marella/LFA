@@ -260,6 +260,7 @@ class GibbsSamplingCoordinator:
     def __init__(self, W: np.ndarray, alpha: np.ndarray, num_topics: int,
                  num_chains: int, max_iterations: Optional[int] = None,
                  window_size: Optional[int] = None, r_hat_threshold: float = 1.1,
+                 calculate_ess: bool = False,
                  ess_threshold: float = 400, post_convergence_samples: int = 50):
         """Initialize sampling coordinator with configuration parameters."""
         self.W = W
@@ -269,6 +270,7 @@ class GibbsSamplingCoordinator:
         self.max_iterations = max_iterations
         self.window_size = window_size
         self.r_hat_threshold = r_hat_threshold
+        self.calculate_ess = calculate_ess
         self.ess_threshold = ess_threshold
         self.post_convergence_samples = post_convergence_samples
         
@@ -317,6 +319,7 @@ class GibbsSamplingCoordinator:
                 self.r_hat_threshold,
                 self.max_iterations,
                 self.window_size,
+                self.calculate_ess,
                 self.ess_threshold
             )
         )
@@ -379,7 +382,9 @@ class GibbsSamplingCoordinator:
 def collapsed_gibbs_sampling(W: np.ndarray, alpha: np.ndarray, num_topics: int,
                            num_chains: int, max_iterations: Optional[int] = None,
                            window_size: Optional[int] = None, r_hat_threshold: float = 1.1,
-                           ess_threshold: float = 400, post_convergence_samples: int = 50) -> Dict:
+                           calculate_ess: bool = False,
+                           ess_threshold: float = 400, 
+                           post_convergence_samples: int = 50) -> Dict:
     """Execute parallel collapsed Gibbs sampling with convergence monitoring."""
     coordinator = GibbsSamplingCoordinator(
         W=W,
@@ -389,6 +394,7 @@ def collapsed_gibbs_sampling(W: np.ndarray, alpha: np.ndarray, num_topics: int,
         max_iterations=max_iterations,
         window_size=window_size,
         r_hat_threshold=r_hat_threshold,
+        calculate_ess=calculate_ess,
         ess_threshold=ess_threshold,
         post_convergence_samples=post_convergence_samples
     )

@@ -11,7 +11,7 @@ from experiment.get_metrics import print_metrics
 # Main block
 if __name__ == '__main__':
     # Simulation parameters
-    M = 400 # Number of subjects
+    M = 40 # Number of subjects
     D = 20   # Number of diseases (without noise)
     num_topics = 10
     seed = 42
@@ -34,10 +34,10 @@ if __name__ == '__main__':
 
     # PCGS details
     num_chains = 2
-    max_iterations = 50000
+    max_iterations = 5000
     window_size = 500
     monitor_params = ['beta', 'theta']
-    post_convergence_samples = 50
+    post_convergence_samples = 100
 
     # Run the experiment
     combined_result, metrics = run_cgs_experiment(
@@ -49,8 +49,8 @@ if __name__ == '__main__':
         beta=beta,
         theta=theta,
         window_size=window_size,
-        r_hat_threshold=1.1,
-        ess_threshold=400,
+        r_hat_threshold=1.2,
+        calculate_ess=False,
         monitor_params=monitor_params,
         post_convergence_samples=post_convergence_samples
     )

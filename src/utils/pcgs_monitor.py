@@ -143,6 +143,7 @@ def monitor_convergence(monitor_queues: List[mp.Queue],
                        r_hat_threshold: float = 1.1,
                        max_iterations: Optional[int] = None,
                        window_size: Optional[int] = None,
+                       calculate_ess: bool = False,
                        ess_threshold: float = 400):
     """Monitor chain convergence and coordinate sample collection."""
     
@@ -151,6 +152,7 @@ def monitor_convergence(monitor_queues: List[mp.Queue],
         r_hat_threshold=r_hat_threshold,
         max_iterations=max_iterations,
         window_size=window_size,
+        calculate_ess=calculate_ess,
         ess_threshold=ess_threshold
     )
     
@@ -185,36 +187,47 @@ def monitor_convergence(monitor_queues: List[mp.Queue],
         raise
 
 class ChainState:
-    def __init__(self):
+    def __init__(self, store_all_samples: bool = False):
         self.current_iteration = 0
-        self.samples = {'beta': [], 'theta': []}
+        self.samples = {'beta': [], 'theta': []} if store_all_samples else None
+        self.recent_samples = {'beta': [], 'theta': []}  # For R-hat calculation
         self.collecting = False
         self.completed = False
+        self.store_all_samples = store_all_samples
         
     def update_iteration(self, iteration: int):
         self.current_iteration = max(self.current_iteration, iteration)
         
-    def add_sample(self, data: Dict):
+    def add_sample(self, data: Dict, window_size: Optional[int] = None):
         for param in ['beta', 'theta']:
             if param in data:
-                self.samples[param].append(data[param])
+                if self.store_all_samples:
+                    self.samples[param].append(data[param])
+                    
+                # Always maintain recent samples for R-hat
+                self.recent_samples[param].append(data[param])
+                if window_size and len(self.recent_samples[param]) > window_size:
+                    self.recent_samples[param].pop(0)
 
 class ChainMonitor:
     def __init__(self, num_chains: int, r_hat_threshold: float,
                  max_iterations: Optional[int] = None,
                  window_size: Optional[int] = None,
+                 calculate_ess: bool = False,
                  ess_threshold: float = 400):
         """Initialize chain monitoring state."""
         self.num_chains = num_chains
         self.r_hat_threshold = r_hat_threshold
         self.max_iterations = max_iterations
         self.window_size = window_size
+        self.calculate_ess = calculate_ess
         self.ess_threshold = ess_threshold
         
         # Per-chain state tracking
-        self.chain_states = {i: ChainState() for i in range(num_chains)}
+        self.chain_states = {i: ChainState(store_all_samples=calculate_ess) 
+                           for i in range(num_chains)}
         self.r_hats = {}
-        self.ess_values = {}  # Add ESS tracking
+        self.ess_values = {} if calculate_ess else None
         self.r_hat_checks = 0
         
     def process_messages(self, monitor_queues: List[mp.Queue], 
@@ -237,7 +250,7 @@ class ChainMonitor:
                     elif msg.type == MessageType.SAMPLE and not self.chain_states[chain_id].collecting:
                         if msg.iteration is not None:
                             self.chain_states[chain_id].update_iteration(msg.iteration)
-                        self.chain_states[chain_id].add_sample(msg.data)
+                        self.chain_states[chain_id].add_sample(msg.data, self.window_size)
                         new_samples = True
                         
                     elif msg.type == MessageType.COLLECTION_COMPLETE:
@@ -253,38 +266,38 @@ class ChainMonitor:
         return new_samples
     
     def check_convergence(self) -> Tuple[float, float]:
-        """Compute R-hat and ESS values."""
-        if not all(len(state.samples['beta']) >= 2 and len(state.samples['theta']) >= 2 
+        """Compute R-hat and optionally ESS values."""
+        if not all(len(state.recent_samples['beta']) >= 2 and 
+                  len(state.recent_samples['theta']) >= 2 
                   for state in self.chain_states.values()):
             return float('inf'), 0.0
         
-        samples = {
-            'beta': [state.samples['beta'] for state in self.chain_states.values()],
-            'theta': [state.samples['theta'] for state in self.chain_states.values()]
+        # Prepare samples for R-hat calculation
+        recent_samples = {
+            'beta': [state.recent_samples['beta'] for state in self.chain_states.values()],
+            'theta': [state.recent_samples['theta'] for state in self.chain_states.values()]
         }
         
-        # For R-hat calculation
-        chains_array_recent = prepare_chains_array(samples, 'beta', 
-                                                 window_size=self.window_size, 
-                                                 thin=1,
-                                                 use_window=True)
+        # Compute R-hat for each parameter
+        for param in recent_samples:
+            self.r_hats[param] = compute_gelman_rubin(recent_samples, param, self.window_size)
         
-        # For ESS calculation
-        chains_array_full = prepare_chains_array(samples, 'beta',
-                                                   thin=1,
-                                                   use_window=False)
-        
-        # Compute R-hat and ESS for each parameter
-        for param in samples:
-            self.r_hats[param] = compute_gelman_rubin(samples, param, self.window_size)
-            self.ess_values[param] = compute_effective_sample_size(samples, param, self.window_size)
+        # Compute ESS if enabled
+        if self.calculate_ess:
+            full_samples = {
+                'beta': [state.samples['beta'] for state in self.chain_states.values()],
+                'theta': [state.samples['theta'] for state in self.chain_states.values()]
+            }
+            for param in full_samples:
+                self.ess_values[param] = compute_effective_sample_size(full_samples, param)
         
         max_r_hat = max(self.r_hats.values()) if self.r_hats else float('inf')
-        min_ess = min(self.ess_values.values()) if self.ess_values else 0.0
+        min_ess = min(self.ess_values.values()) if self.ess_values else float('inf')
         
         print(f"Check #{self.r_hat_checks}: "
-              f"max R̂ = {max_r_hat:.4f} (threshold: {self.r_hat_threshold:.4f}), "
-              f"min ESS = {min_ess:.1f} (threshold: {self.ess_threshold:.1f})")
+              f"max R̂ = {max_r_hat:.4f} (threshold: {self.r_hat_threshold:.4f})"
+              + (f", min ESS = {min_ess:.1f} (threshold: {self.ess_threshold:.1f})" 
+                 if self.calculate_ess else ""))
         
         self.r_hat_checks += 1
         
@@ -303,14 +316,20 @@ class ChainMonitor:
                 print(f"All chains reached max iterations ({self.max_iterations})")
                 return True
         
-        # Check both R-hat and ESS convergence
-        if not self.r_hats or not self.ess_values:
+        # Check R-hat convergence
+        if not self.r_hats:
             return False
         
         r_hat_converged = max(self.r_hats.values()) < self.r_hat_threshold
-        ess_sufficient = min(self.ess_values.values()) > self.ess_threshold
         
-        return r_hat_converged and ess_sufficient
+        # If ESS calculation is enabled, check ESS convergence too
+        if self.calculate_ess:
+            if not self.ess_values:
+                return False
+            ess_sufficient = min(self.ess_values.values()) > self.ess_threshold
+            return r_hat_converged and ess_sufficient
+        
+        return r_hat_converged
     
     def start_collection(self, control_queues: List[mp.Queue]):
         """Start the collection phase for all chains."""

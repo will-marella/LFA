@@ -4,7 +4,7 @@ from models.pcgs import collapsed_gibbs_sampling
 from experiment.get_metrics import align_chains, merge_chains, align_to_simulated_topics, compute_cgs_metrics
 
 def run_cgs_experiment(W, alpha, num_topics, num_chains, max_iterations, beta, theta, 
-                       window_size, r_hat_threshold=1.1, ess_threshold=400,
+                       window_size, r_hat_threshold=1.1, calculate_ess=False, ess_threshold=400,
                        monitor_params=None, post_convergence_samples=50):
    
     start_time = time.time()
@@ -17,6 +17,7 @@ def run_cgs_experiment(W, alpha, num_topics, num_chains, max_iterations, beta, t
         max_iterations=max_iterations,
         window_size=window_size,
         r_hat_threshold=r_hat_threshold,
+        calculate_ess=calculate_ess,
         ess_threshold=ess_threshold,
         post_convergence_samples=post_convergence_samples
     )
