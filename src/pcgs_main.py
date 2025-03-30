@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     # PCGS details
     num_chains = 2
-    max_iterations = 5000
+    max_iterations = 2000
     window_size = 500
     monitor_params = ['beta', 'theta']
     post_convergence_samples = 100
@@ -49,7 +49,7 @@ if __name__ == '__main__':
         beta=beta,
         theta=theta,
         window_size=window_size,
-        r_hat_threshold=1.2,
+        r_hat_threshold=1.0,
         calculate_ess=False,
         monitor_params=monitor_params,
         post_convergence_samples=post_convergence_samples

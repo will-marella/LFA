@@ -179,3 +179,71 @@ def print_metrics(metrics):
     print("MAE between aligned theta matrices:", metrics['theta_mae'])
     print("Pearson correlation between aligned theta matrices:", metrics['theta_pearson_corr'])
     print("Run-time:", metrics['run_time'], "seconds")
+
+def compute_mfvi_metrics(result, beta, theta):
+    """
+    Compute metrics specific to MFVI results.
+    
+    Args:
+        result: Dictionary containing MFVI results
+            - beta: Estimated topic-disease matrix
+            - theta: Estimated topic distributions
+            - z: Expected topic assignments
+            - final_elbo: Final ELBO value
+            - num_iterations: Number of iterations until convergence
+        beta: True topic-disease matrix
+        theta: True topic distributions
+    """
+    metrics = {}
+    
+    # Basic convergence metrics
+    metrics['num_iterations'] = result['num_iterations']
+    metrics['final_elbo'] = result['final_elbo']
+    
+    # Topic recovery metrics
+    # Beta matrix correlation
+    beta_corr = np.corrcoef(result['beta'].flatten(), beta.flatten())[0,1]
+    metrics['beta_correlation'] = beta_corr
+    
+    # Topic distribution correlation
+    theta_corr = np.corrcoef(result['theta'].flatten(), theta.flatten())[0,1]
+    metrics['theta_correlation'] = theta_corr
+    
+    # Mean squared errors
+    metrics['beta_mse'] = np.mean((result['beta'] - beta) ** 2)
+    metrics['theta_mse'] = np.mean((result['theta'] - theta) ** 2)
+    
+    return metrics
+
+def align_mfvi_results(result, simulated_beta):
+    """Align MFVI results with simulated topics."""
+    estimated_beta = result['beta']
+    
+    # Calculate the correlation matrix
+    correlation_matrix = calculate_correlation_2(estimated_beta, simulated_beta)
+    cost_matrix = -correlation_matrix
+
+    # Align estimated_beta to simulated_beta using the Hungarian algorithm
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    
+    # Create a reverse mapping to reorder the matrices
+    reorder_mapping = {sim: est for est, sim in zip(row_ind, col_ind)}
+    reorder_indices = [reorder_mapping[i] for i in range(len(reorder_mapping))]
+    
+    # Reorder the matrices
+    result['beta'] = result['beta'][reorder_indices, :]
+    result['theta'] = result['theta'][:, reorder_indices]
+    if 'z' in result:  # Handle probabilistic z assignments if present
+        result['z'] = result['z'][:, :, reorder_indices]
+
+    return result
+
+def print_mfvi_metrics(metrics):
+    """Print metrics specific to MFVI results."""
+    print("Number of iterations:", metrics['num_iterations'])
+    print("Final ELBO:", metrics['final_elbo'])
+    print("Beta correlation:", metrics['beta_correlation'])
+    print("Theta correlation:", metrics['theta_correlation'])
+    print("Beta MSE:", metrics['beta_mse'])
+    print("Theta MSE:", metrics['theta_mse'])
+    print("Run-time:", metrics['run_time'], "seconds")

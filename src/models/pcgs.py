@@ -155,6 +155,10 @@ class ChainRunner:
         
         # Check control messages
         self._check_control_messages()
+        
+        # Handle sample collection if in collection phase
+        if self.collecting_samples:
+            self._collect_samples(current_state)
     
     def _complete_collection(self):
         """Ensure collection completes even if max_iterations reached."""
@@ -208,6 +212,14 @@ class ChainRunner:
     
     def _collect_samples(self, state: dict):
         if self.collecting_samples:
+            if self.samples_collected >= self.post_convergence_samples:
+                print(f"Chain {self.chain_id} completed collection")
+                self.monitor_queue.put(Message(
+                    type=MessageType.COLLECTION_COMPLETE,
+                    chain_id=self.chain_id
+                ))
+                return
+            
             print(f"Chain {self.chain_id} collecting sample "
                   f"{self.samples_collected + 1}/{self.post_convergence_samples}")
             for key in self.final_samples:
