@@ -5,9 +5,9 @@ import time
 import queue
 import logging
 
-from utils.process_manager import ProcessManager, Message, MessageType
+from src.utils.process_manager import ProcessManager, Message, MessageType
 from typing import Optional, List, Dict
-from utils.pcgs_monitor import monitor_convergence
+from src.utils.pcgs_monitor import monitor_convergence
 
 
 

@@ -14,9 +14,8 @@ TOPIC_PROB=0.30
 NONTOPIC_PROB=0.01
 MAX_ITER=2000
 CONV_THRESH=1e-6
-
-# Output configuration
-OUTPUT_FILE="results/mfvi/baseline_M${M}_K${K}.csv"
+RESULTS_DIR="/path/to/central/results"
+EXP_TAG="baseline_M${M}_K${K}"
 
 # Run experiment with current seed
 python src/scripts/run_mfvi_experiments.py \
@@ -28,4 +27,5 @@ python src/scripts/run_mfvi_experiments.py \
     --max_iterations $MAX_ITER \
     --convergence_threshold $CONV_THRESH \
     --seed $SLURM_ARRAY_TASK_ID \
-    --output_file $OUTPUT_FILE 
+    --results_dir $RESULTS_DIR \
+    --experiment_tag $EXP_TAG 

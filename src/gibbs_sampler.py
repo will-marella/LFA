@@ -1,7 +1,7 @@
 import time
 
-from models.pcgs import collapsed_gibbs_sampling
-from experiment.get_metrics import align_chains, merge_chains, align_to_simulated_topics, compute_cgs_metrics
+from src.models.pcgs import collapsed_gibbs_sampling
+from src.experiment.get_metrics import align_chains, merge_chains, align_to_simulated_topics, compute_cgs_metrics
 
 def run_cgs_experiment(W, alpha, num_topics, num_chains, max_iterations, beta, theta, 
                        window_size, r_hat_threshold=1.1, calculate_ess=False, ess_threshold=400,
@@ -31,6 +31,13 @@ def run_cgs_experiment(W, alpha, num_topics, num_chains, max_iterations, beta, t
     
     metrics = compute_cgs_metrics(combined_result, beta, theta)
     metrics['run_time'] = run_time
+    
+    # Add number of iterations (using max across chains)
+    # Each chain result has samples collected at different iterations
+    metrics['num_iterations'] = max(
+        len(chain_result['beta_samples']) 
+        for chain_result in results
+    )
     
     return combined_result, metrics
 

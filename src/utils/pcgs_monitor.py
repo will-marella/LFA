@@ -5,7 +5,7 @@ import multiprocessing as mp
 from queue import Empty
 from typing import List, Optional, Dict, Tuple
 
-from utils.process_manager import ProcessManager, Message, MessageType
+from src.utils.process_manager import ProcessManager, Message, MessageType
 
 def prepare_chains_array(chain_samples: Dict[str, List[np.ndarray]], 
                         parameter: str,

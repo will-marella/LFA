@@ -2,13 +2,13 @@ import os
 import numpy as np
 from argparse import Namespace
 
-from src.scripts.run_mfvi_experiments import run_experiment, safely_write_results
+from src.scripts.run_pcgs_experiments import run_experiment, safely_write_results
 
 def test_multiple_configurations():
     # Create test output directory
-    test_dir = 'test_output/mfvi_results'
+    test_dir = 'test_output/pcgs_results'
     os.makedirs(test_dir, exist_ok=True)
-    results_file = os.path.join(test_dir, "mfvi_results.csv")
+    results_file = os.path.join(test_dir, "pcgs_results.csv")
     
     # Define two different configurations
     configs = [
@@ -36,8 +36,11 @@ def test_multiple_configurations():
                 K=config['K'],
                 topic_prob=0.30,
                 nontopic_prob=0.01,
-                max_iterations=1000,
-                convergence_threshold=1e-6,
+                num_chains=2,
+                max_iterations=3000,
+                window_size=500,
+                r_hat_threshold=2.5,
+                post_convergence_samples=50,
                 seed=seed,
                 results_dir=test_dir,
                 experiment_tag=config['name']
@@ -52,8 +55,8 @@ def test_multiple_configurations():
             
             # Print key metrics
             print(f"Results for {config['name']}, seed {seed}:")
-            print(f"Beta correlation: {row['beta_correlation']:.4f}")
-            print(f"Theta correlation: {row['theta_correlation']:.4f}")
+            print(f"Beta MAE: {row['beta_mae']:.4f}")
+            print(f"Beta correlation: {row['beta_pearson_corr']:.4f}")
             print(f"Num iterations: {row['num_iterations']}")
             print(f"Run time: {row['run_time']:.2f} seconds")
 

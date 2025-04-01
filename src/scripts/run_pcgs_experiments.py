@@ -7,7 +7,7 @@ from pathlib import Path
 import time
 
 from src.experiment.simulation import simulate_topic_disease_data
-from src.mfvi_sampler import run_mfvi_experiment
+from src.gibbs_sampler import run_cgs_experiment
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -19,8 +19,11 @@ def parse_args():
     parser.add_argument('--nontopic_prob', type=float, default=0.01, help='Non-topic-associated probability')
     
     # Algorithm parameters
+    parser.add_argument('--num_chains', type=int, default=2, help='Number of parallel chains')
     parser.add_argument('--max_iterations', type=int, default=2000)
-    parser.add_argument('--convergence_threshold', type=float, default=1e-6)
+    parser.add_argument('--window_size', type=int, default=500, help='Window size for convergence check')
+    parser.add_argument('--r_hat_threshold', type=float, default=1.1, help='R-hat convergence threshold')
+    parser.add_argument('--post_convergence_samples', type=int, default=100)
     
     # Experiment parameters
     parser.add_argument('--seed', type=int, required=True)
@@ -44,37 +47,33 @@ def flatten_metrics(metrics, args):
         'K': args.K,
         'topic_prob': args.topic_prob,
         'nontopic_prob': args.nontopic_prob,
+        'num_chains': args.num_chains,
         'max_iterations': args.max_iterations,
-        'convergence_threshold': args.convergence_threshold,
+        'window_size': args.window_size,
+        'r_hat_threshold': args.r_hat_threshold,
+        'post_convergence_samples': args.post_convergence_samples,
         
         # Results
         'num_iterations': metrics['num_iterations'],
-        'final_elbo': metrics['final_elbo'],
-        'beta_correlation': metrics['beta_correlation'],
-        'theta_correlation': metrics['theta_correlation'],
-        'beta_mse': metrics['beta_mse'],
-        'theta_mse': metrics['theta_mse'],
-        'run_time': metrics['run_time'],
-        'converged': metrics['num_iterations'] < args.max_iterations
+        'beta_mae': metrics['beta_mae'],
+        'beta_pearson_corr': metrics['beta_pearson_corr'],
+        'theta_mae': metrics['theta_mae'],
+        'theta_pearson_corr': metrics['theta_pearson_corr'],
+        'run_time': metrics['run_time']
     }
     return row
 
 def safely_write_results(row, results_file):
-    """Write results to CSV file with file locking to prevent concurrent access issues."""
-    results_dir = os.path.dirname(results_file)
-    lock_file = os.path.join(results_dir, ".lock")
+    """Write results to CSV with file locking."""
+    lock_file = results_file + '.lock'
     
-    # Ensure directory exists
-    os.makedirs(results_dir, exist_ok=True)
-    
-    # Simple file-based locking
+    # Try to acquire lock
     while os.path.exists(lock_file):
         time.sleep(0.1)
     
     try:
         # Create lock
-        with open(lock_file, 'w') as f:
-            f.write('locked')
+        Path(lock_file).touch()
         
         # Read existing results if any
         if os.path.exists(results_file):
@@ -107,15 +106,18 @@ def run_experiment(args):
         include_healthy_topic=True
     )
     
-    # Run MFVI
-    result, metrics = run_mfvi_experiment(
+    # Run PCGS
+    result, metrics = run_cgs_experiment(
         W=W,
         alpha=np.ones(args.K + 1) / 10,
-        num_topics=args.K + 1,
+        num_topics=args.K + 1,  # +1 for healthy topic
+        num_chains=args.num_chains,
+        max_iterations=args.max_iterations,
         beta=beta,
         theta=theta,
-        max_iterations=args.max_iterations,
-        convergence_threshold=args.convergence_threshold
+        window_size=args.window_size,
+        r_hat_threshold=args.r_hat_threshold,
+        post_convergence_samples=args.post_convergence_samples
     )
     
     return flatten_metrics(metrics, args)
@@ -125,7 +127,7 @@ def main():
     row = run_experiment(args)
     
     # Define results file path
-    results_file = os.path.join(args.results_dir, "mfvi_results.csv")
+    results_file = os.path.join(args.results_dir, "pcgs_results.csv")
     
     # Safely write results
     safely_write_results(row, results_file)
