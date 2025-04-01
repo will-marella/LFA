@@ -1,0 +1,8 @@
+Metadata-Version: 2.1
+Name: topic-modeling
+Version: 0.1
+License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: matplotlib
+Requires-Dist: seaborn

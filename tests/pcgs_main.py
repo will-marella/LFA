@@ -2,9 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from experiment.simulation import simulate_topic_disease_data
-from gibbs_sampler import run_cgs_experiment
-from experiment.get_metrics import print_metrics
+from src.experiment.simulation import simulate_topic_disease_data
+from src.gibbs_sampler import run_cgs_experiment
+from src.experiment.get_metrics import print_metrics
 
 
 

@@ -1,9 +1,9 @@
 import time
 import numpy as np
 
-from models.mfvi_model import MFVIModel
-from utils.mfvi_monitor import ELBOMonitor
-from experiment.get_metrics import align_mfvi_results, compute_mfvi_metrics
+from src.models.mfvi_model import MFVIModel
+from src.utils.mfvi_monitor import ELBOMonitor
+from src.experiment.get_metrics import align_mfvi_results, compute_mfvi_metrics
 
 def run_mfvi_experiment(W, alpha, num_topics, beta, theta, 
                        max_iterations=1000, convergence_threshold=1e-4):

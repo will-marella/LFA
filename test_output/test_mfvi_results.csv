@@ -1,0 +1,2 @@
+seed,M,D,K,topic_prob,nontopic_prob,max_iterations,convergence_threshold,num_iterations,final_elbo,beta_correlation,theta_correlation,beta_mse,theta_mse,run_time,converged
+42,100,20,5,0.3,0.01,1000,1e-06,835,10318.181258939518,0.32672039066255004,0.19988551657118087,0.02065300723283829,0.16345782810887685,51.874101877212524,True

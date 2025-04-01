@@ -2,9 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from experiment.simulation import simulate_topic_disease_data
-from mfvi_sampler import run_mfvi_experiment
-from experiment.get_metrics import print_mfvi_metrics
+from src.experiment.simulation import simulate_topic_disease_data
+from src.mfvi_sampler import run_mfvi_experiment
+from src.experiment.get_metrics import print_mfvi_metrics
 
 if __name__ == '__main__':
     # Simulation parameters
