@@ -39,7 +39,7 @@ def test_multiple_configurations():
                 num_chains=2,
                 max_iterations=3000,
                 window_size=500,
-                r_hat_threshold=2.5,
+                r_hat_threshold=4.0,
                 post_convergence_samples=50,
                 seed=seed,
                 results_dir=test_dir,

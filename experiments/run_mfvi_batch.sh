@@ -1,31 +1,32 @@
 #!/bin/bash
-#SBATCH --job-name=mfvi_exp
-#SBATCH --output=logs/mfvi_%A_%a.out
-#SBATCH --error=logs/mfvi_%A_%a.err
-#SBATCH --array=1-10
-#SBATCH --time=2:00:00
-#SBATCH --mem=8G
+#SBATCH -A INOUYE-SL3-CPU
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=1
+#SBATCH --time=01:00:00
+#SBATCH -p icelake
+#SBATCH --job-name=mfvi_test
+#SBATCH --output=../../results/testing/mfvi_test_%j.out
+#SBATCH --error=../../results/testing/mfvi_test_%j.err
+#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-user=wtm24@cam.ac.uk
 
-# Experiment configuration
-M=4000
-D=20
-K=10
-TOPIC_PROB=0.30
-NONTOPIC_PROB=0.01
-MAX_ITER=2000
-CONV_THRESH=1e-6
-RESULTS_DIR="/path/to/central/results"
-EXP_TAG="baseline_M${M}_K${K}"
+# Load Python module
+module load python/3.9.12/gcc/pdcqf4o5
 
-# Run experiment with current seed
-python src/scripts/run_mfvi_experiments.py \
-    --M $M \
-    --D $D \
-    --K $K \
-    --topic_prob $TOPIC_PROB \
-    --nontopic_prob $NONTOPIC_PROB \
-    --max_iterations $MAX_ITER \
-    --convergence_threshold $CONV_THRESH \
-    --seed $SLURM_ARRAY_TASK_ID \
-    --results_dir $RESULTS_DIR \
-    --experiment_tag $EXP_TAG 
+# Activate virtual environment
+source ../../myenv/bin/activate
+
+# Run the experiment
+python ../src/scripts/run_mfvi_experiments.py \
+    --M 5000 \
+    --D 200 \
+    --K 10 \
+    --topic_prob 0.30 \
+    --nontopic_prob 0.01 \
+    --max_iterations 100000 \
+    --convergence_threshold 1e-6 \
+    --seed 42 \
+    --results_dir ../../results/testing \
+    --experiment_tag "mfvi_initial_test"
+
+echo "Job completed. Results saved in results/testing/" 
