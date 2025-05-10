@@ -33,8 +33,8 @@ if __name__ == '__main__':
     alpha = np.ones(num_topics) / 10
 
     # PCGS details
-    num_chains = 2
-    max_iterations = 2000
+    num_chains = 4
+    max_iterations = 10000
     window_size = 500
     monitor_params = ['beta', 'theta']
     post_convergence_samples = 100

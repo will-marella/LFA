@@ -5,6 +5,9 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import time
+import logging
+import sys
+from datetime import datetime
 
 from src.experiment.simulation import simulate_topic_disease_data
 from src.gibbs_sampler import run_cgs_experiment
@@ -31,7 +34,34 @@ def parse_args():
                        help='Directory for results')
     parser.add_argument('--experiment_tag', type=str, required=True,
                        help='Tag to identify this batch of experiments')
+    parser.add_argument('--log_file', type=str, default=None,
+                       help='Path to log file (if not specified, logs to stdout)')
     return parser.parse_args()
+
+def setup_logging(log_file=None):
+    """Set up logging configuration."""
+    log_format = '%(asctime)s - %(levelname)s - %(message)s'
+    date_format = '%Y-%m-%d %H:%M:%S'
+    
+    if log_file:
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        logging.basicConfig(
+            level=logging.INFO,
+            format=log_format,
+            datefmt=date_format,
+            handlers=[
+                logging.FileHandler(log_file),
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
+    else:
+        logging.basicConfig(
+            level=logging.INFO,
+            format=log_format,
+            datefmt=date_format,
+            handlers=[logging.StreamHandler(sys.stdout)]
+        )
 
 def flatten_metrics(metrics, args):
     """Flatten metrics into a single row dictionary."""
@@ -59,12 +89,17 @@ def flatten_metrics(metrics, args):
         'beta_pearson_corr': metrics['beta_pearson_corr'],
         'theta_mae': metrics['theta_mae'],
         'theta_pearson_corr': metrics['theta_pearson_corr'],
-        'run_time': metrics['run_time']
+        'run_time': metrics['run_time'],
+        'min_r_hat': metrics.get('min_r_hat', float('inf')),
+        'converged': metrics.get('converged', False)
     }
     return row
 
 def safely_write_results(row, results_file):
     """Write results to CSV with file locking."""
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(results_file), exist_ok=True)
+    
     lock_file = results_file + '.lock'
     
     # Try to acquire lock
@@ -84,6 +119,7 @@ def safely_write_results(row, results_file):
         
         # Write back
         new_df.to_csv(results_file, index=False)
+        logging.info(f"Results written to {results_file}")
             
     finally:
         # Remove lock
@@ -95,6 +131,7 @@ def run_experiment(args):
     np.random.seed(args.seed)
     
     # Generate synthetic data
+    logging.info(f"Generating synthetic data with M={args.M}, D={args.D}, K={args.K}")
     W, z, beta, theta = simulate_topic_disease_data(
         seed=args.seed,
         M=args.M,
@@ -107,6 +144,7 @@ def run_experiment(args):
     )
     
     # Run PCGS
+    logging.info(f"Starting PCGS with {args.num_chains} chains, max_iterations={args.max_iterations}, r_hat_threshold={args.r_hat_threshold}")
     result, metrics = run_cgs_experiment(
         W=W,
         alpha=np.ones(args.K + 1) / 10,
@@ -120,17 +158,49 @@ def run_experiment(args):
         post_convergence_samples=args.post_convergence_samples
     )
     
+    # Log final metrics
+    logging.info(f"Experiment completed in {metrics['run_time']:.2f} seconds")
+    logging.info(f"Number of iterations: {metrics['num_iterations']}")
+    logging.info(f"Beta MAE: {metrics['beta_mae']:.4f}")
+    logging.info(f"Beta Pearson correlation: {metrics['beta_pearson_corr']:.4f}")
+    logging.info(f"Theta MAE: {metrics['theta_mae']:.4f}")
+    logging.info(f"Theta Pearson correlation: {metrics['theta_pearson_corr']:.4f}")
+    
+    if 'min_r_hat' in metrics:
+        logging.info(f"Minimum R-hat reached: {metrics['min_r_hat']:.4f}")
+    
     return flatten_metrics(metrics, args)
 
 def main():
     args = parse_args()
-    row = run_experiment(args)
     
-    # Define results file path
-    results_file = os.path.join(args.results_dir, "pcgs_results.csv")
+    # Set up logging
+    if args.log_file:
+        # If log_file is specified but doesn't include a directory, put it in results_dir
+        if not os.path.dirname(args.log_file):
+            args.log_file = os.path.join(args.results_dir, args.log_file)
+    else:
+        # Default log file in results_dir
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        args.log_file = os.path.join(args.results_dir, f"pcgs_log_{timestamp}.log")
     
-    # Safely write results
-    safely_write_results(row, results_file)
+    setup_logging(args.log_file)
+    logging.info(f"Starting PCGS experiment with tag: {args.experiment_tag}")
+    logging.info(f"Arguments: {vars(args)}")
+    
+    try:
+        row = run_experiment(args)
+        
+        # Define results file path
+        results_file = os.path.join(args.results_dir, "pcgs_results.csv")
+        
+        # Safely write results
+        safely_write_results(row, results_file)
+        
+        logging.info("Experiment completed successfully")
+    except Exception as e:
+        logging.error(f"Experiment failed: {str(e)}", exc_info=True)
+        raise
 
 if __name__ == '__main__':
     main() 

@@ -371,7 +371,10 @@ class GibbsSamplingCoordinator:
                     else:
                         raise RuntimeError(f"Unexpected message type from chain {chain_id}: {result.type}")
             
-            return chain_results  # Return just the list of chain results
+            return {
+                'chain_results': chain_results,
+                'monitor_stats': monitor_stats
+            }
             
         except Exception as e:
             logging.error(f"Error collecting results: {str(e)}")
@@ -410,4 +413,14 @@ def collapsed_gibbs_sampling(W: np.ndarray, alpha: np.ndarray, num_topics: int,
         ess_threshold=ess_threshold,
         post_convergence_samples=post_convergence_samples
     )
-    return coordinator.run()
+    results = coordinator.run()
+    
+    # Extract the chain results and monitor statistics
+    chain_results = results.get('chain_results', [])
+    monitor_stats = results.get('monitor_stats', {})
+    
+    # Return both the chain results and monitor statistics
+    return {
+        'chain_results': chain_results,
+        'monitor_stats': monitor_stats
+    }

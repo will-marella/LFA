@@ -308,12 +308,12 @@ class ChainMonitor:
         if any(state.collecting for state in self.chain_states.values()):
             return False
             
-        # Check if all chains have reached max iterations
+        # Check if any chain has reached max iterations (changed from all to any)
         if self.max_iterations:
             iterations = [state.current_iteration for state in self.chain_states.values()]
             print(f"Current chain iterations: {iterations}")
-            if all(iter_num >= self.max_iterations for iter_num in iterations):
-                print(f"All chains reached max iterations ({self.max_iterations})")
+            if any(iter_num >= self.max_iterations for iter_num in iterations):
+                print(f"At least one chain reached max iterations ({self.max_iterations})")
                 return True
         
         # Check R-hat convergence
