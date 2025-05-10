@@ -14,7 +14,7 @@
 module load python/3.9.12/gcc/pdcqf4o5
 
 # Activate virtual environment
-source myenv/bin/activate
+source ../myenv/bin/activate
 
 # Create results directory with timestamp
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
