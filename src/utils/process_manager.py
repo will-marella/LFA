@@ -35,7 +35,7 @@ class Message:
         self.iteration = iteration
 
 class ProcessManager:
-    def __init__(self, num_chains: int, timeout: float = 30.0):
+    def __init__(self, num_chains: int, timeout: float = 600.0):
         self.num_chains = num_chains
         self.timeout = timeout
         self.chain_statuses = {i: ChainStatus.INITIALIZING for i in range(num_chains)}
