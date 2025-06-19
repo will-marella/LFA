@@ -112,6 +112,11 @@ def merge_chains(aligned_results):
 def calculate_correlation_2(beta1, beta2):
     # Transpose beta matrices to correlate topics (rows) instead of diseases (columns)
     correlation_matrix = np.corrcoef(beta1, beta2)[:len(beta1), len(beta1):]
+
+    # Replace any NaN or infinite correlations (which arise when a vector has zero variance)
+    # Treat undefined correlations as 0 (no linear relationship)
+    correlation_matrix = np.nan_to_num(correlation_matrix, nan=0.0, posinf=1.0, neginf=-1.0)
+
     return correlation_matrix
 
 def align_to_simulated_topics(combined_result, simulated_beta):
