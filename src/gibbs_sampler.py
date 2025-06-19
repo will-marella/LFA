@@ -55,10 +55,15 @@ def run_cgs_experiment(W, alpha, num_topics, num_chains, max_iterations, beta, t
     metrics = compute_cgs_metrics(combined_result, beta, theta)
     metrics['run_time'] = run_time
     
-    # Add number of iterations (using max across chains)
-    # Each chain result has samples collected at different iterations
-    metrics['num_iterations'] = max(
-        len(chain_result['beta_samples']) 
+    # Record number of iterations actually performed (max across chains)
+    if 'chain_iterations' in monitor_stats:
+        metrics['num_iterations'] = max(monitor_stats['chain_iterations'].values())
+    else:
+        metrics['num_iterations'] = None  # Fallback when information missing
+    
+    # Also record how many post-convergence samples were collected per chain
+    metrics['num_samples_collected'] = max(
+        len(chain_result['beta_samples'])
         for chain_result in chain_results
     )
     
