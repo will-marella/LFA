@@ -7,6 +7,9 @@ from typing import List, Optional, Dict, Tuple
 
 from src.utils.process_manager import ProcessManager, Message, MessageType
 
+# Minimum number of per-chain samples required before computing Gelman–Rubin.
+MIN_SAMPLES_FOR_RHAT = 20
+
 def prepare_chains_array(chain_samples: Dict[str, List[np.ndarray]], 
                         parameter: str,
                         window_size: Optional[int] = None,
@@ -267,8 +270,8 @@ class ChainMonitor:
     
     def check_convergence(self) -> Tuple[float, float]:
         """Compute R-hat and optionally ESS values."""
-        if not all(len(state.recent_samples['beta']) >= 2 and 
-                  len(state.recent_samples['theta']) >= 2 
+        if not all(len(state.recent_samples['beta']) >= MIN_SAMPLES_FOR_RHAT and 
+                  len(state.recent_samples['theta']) >= MIN_SAMPLES_FOR_RHAT 
                   for state in self.chain_states.values()):
             return float('inf'), 0.0
         

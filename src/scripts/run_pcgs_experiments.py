@@ -90,7 +90,9 @@ def flatten_metrics(metrics, args):
         'theta_mae': metrics['theta_mae'],
         'theta_pearson_corr': metrics['theta_pearson_corr'],
         'run_time': metrics['run_time'],
-        'min_r_hat': metrics.get('min_r_hat', float('inf')),
+        'r_hat_beta': metrics.get('r_hat_beta', float('inf')),
+        'r_hat_theta': metrics.get('r_hat_theta', float('inf')),
+        'r_hat_overall': metrics.get('r_hat_overall', float('inf')),
         'converged': metrics.get('converged', False)
     }
     return row
@@ -166,8 +168,10 @@ def run_experiment(args):
     logging.info(f"Theta MAE: {metrics['theta_mae']:.4f}")
     logging.info(f"Theta Pearson correlation: {metrics['theta_pearson_corr']:.4f}")
     
-    if 'min_r_hat' in metrics:
-        logging.info(f"Minimum R-hat reached: {metrics['min_r_hat']:.4f}")
+    if 'r_hat_beta' in metrics:
+        logging.info(
+            f"R-hat beta: {metrics['r_hat_beta']:.4f}, theta: {metrics['r_hat_theta']:.4f}, overall: {metrics['r_hat_overall']:.4f}"
+        )
     
     return flatten_metrics(metrics, args)
 

@@ -1,3 +1,10 @@
+import pathlib, sys, os
+
+# Ensure LFA root is on PYTHONPATH when script run from repo root
+_LFA_ROOT = pathlib.Path(__file__).resolve().parents[1]
+if str(_LFA_ROOT) not in sys.path:
+    sys.path.insert(0, str(_LFA_ROOT))
+
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns

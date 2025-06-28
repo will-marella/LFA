@@ -30,14 +30,13 @@ def run_cgs_experiment(W, alpha, num_topics, num_chains, max_iterations, beta, t
     end_time = time.time()
     run_time = end_time - start_time
     
-    # Extract the monitor statistics which include R-hat values
+    # Extract monitor statistics which include parameter-specific R-hat values
     monitor_stats = results.get('monitor_stats', {})
-    
-    # Get the minimum R-hat value reached
-    min_r_hat = float('inf')
-    if 'r_hats' in monitor_stats:
-        for param, r_hat in monitor_stats['r_hats'].items():
-            min_r_hat = min(min_r_hat, r_hat)
+
+    r_hat_beta = monitor_stats.get('r_hats', {}).get('beta', float('inf'))
+    r_hat_theta = monitor_stats.get('r_hats', {}).get('theta', float('inf'))
+    # Define an overall criterion (worst of the two)
+    r_hat_overall = max(r_hat_beta, r_hat_theta)
     
     # Check if convergence was reached
     converged = monitor_stats.get('max_iterations_reached', False)
@@ -67,12 +66,16 @@ def run_cgs_experiment(W, alpha, num_topics, num_chains, max_iterations, beta, t
         for chain_result in chain_results
     )
     
-    # Add the minimum R-hat value and convergence status
-    metrics['min_r_hat'] = min_r_hat
+    # Add R-hat values and convergence status
+    metrics['r_hat_beta'] = r_hat_beta
+    metrics['r_hat_theta'] = r_hat_theta
+    metrics['r_hat_overall'] = r_hat_overall
     metrics['converged'] = converged
     
-    # Log the minimum R-hat value
-    logger.info(f"Minimum R-hat value reached: {min_r_hat:.4f}")
+    # Log the R-hat values
+    logger.info(
+        f"R-hat values – beta: {r_hat_beta:.4f}, theta: {r_hat_theta:.4f}, overall(max): {r_hat_overall:.4f}"
+    )
     logger.info(f"Convergence status: {'Converged' if converged else 'Not converged'}")
     
     return combined_result, metrics
