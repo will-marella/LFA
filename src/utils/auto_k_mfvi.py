@@ -74,10 +74,14 @@ def _cv_score_single_K(
     inference_max_iter: int,
     inference_tol: float,
     seed: int,
-) -> Tuple[float, List[float]]:
-    """Return mean perplexity and list of fold perplexities for candidate K."""
-    fold_scores: List[float] = []
+) -> Tuple[float, float, List[float], List[float]]:
+    """Return mean perplexity & mean BIC together with per-fold values for candidate K."""
+    fold_perps: List[float] = []
+    fold_bics: List[float] = []
     folds = _kfold_indices(W.shape[0], n_folds=n_folds, seed=seed)
+
+    D = W.shape[1]
+    num_params = (K + 1) * D  # β parameters only
 
     for train_idx, val_idx in folds:
         W_train = W[train_idx]
@@ -105,10 +109,16 @@ def _cv_score_single_K(
             )
             P_pred[i] = theta_exp @ beta_hat
 
-        fold_perp = compute_perplexity(W_val, P_pred)
-        fold_scores.append(float(fold_perp))
+        perp = compute_perplexity(W_val, P_pred)
+        fold_perps.append(float(perp))
 
-    return float(np.mean(fold_scores)), fold_scores
+        # Convert perplexity to log-likelihood and then BIC
+        N_val = W_val.size
+        log_likelihood = -N_val * np.log(perp)
+        bic = -2 * log_likelihood + num_params * np.log(N_val)
+        fold_bics.append(float(bic))
+
+    return float(np.mean(fold_perps)), float(np.mean(fold_bics)), fold_perps, fold_bics
 
 
 def select_k_mfvi(
@@ -140,7 +150,7 @@ def select_k_mfvi(
     best_k : int
         K value with the lowest mean perplexity.
     results : List[Dict]
-        One dict per candidate with keys: "K", "mean_perplexity", "fold_perplexities".
+        One dict per candidate with keys: "K", "mean_perplexity", "mean_bic", "fold_perplexities", "fold_bics".
     """
     if not ((W == 0) | (W == 1)).all():
         raise ValueError("Input matrix W must be binary (0/1).")
@@ -150,7 +160,7 @@ def select_k_mfvi(
 
     for K in candidate_Ks:
         K_alpha = np.ones(K + 1) / 10 if alpha is None else alpha
-        mean_perp, fold_perps = _cv_score_single_K(
+        mean_perp, mean_bic, fold_perps, fold_bics = _cv_score_single_K(
             W,
             alpha=K_alpha,
             K=K,
@@ -161,9 +171,15 @@ def select_k_mfvi(
             inference_tol=inference_tol,
             seed=seed,
         )
-        results.append({"K": K, "mean_perplexity": mean_perp, "fold_perplexities": fold_perps})
+        results.append({
+            "K": K,
+            "mean_perplexity": mean_perp,
+            "mean_bic": mean_bic,
+            "fold_perplexities": fold_perps,
+            "fold_bics": fold_bics,
+        })
 
-    best_entry = min(results, key=lambda d: d["mean_perplexity"])
+    best_entry = min(results, key=lambda d: d["mean_bic"])
     best_k = best_entry["K"]
 
     elapsed = time.time() - t0

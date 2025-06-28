@@ -43,8 +43,10 @@ if __name__ == "__main__":
         convergence_threshold=0.01,
     )
 
-    print("Results per K (mean perplexity):")
+    print("Results per K (mean perplexity, BIC):")
     for entry in results:
-        print(f"  K={entry['K']:2d} -> {entry['mean_perplexity']:.4f}")
+        print(
+            f"  K={entry['K']:2d} -> perp={entry['mean_perplexity']:.4f} | BIC={entry['mean_bic']:.2f}"
+        )
 
-    print("\nChosen best K:", best_k)
+    print("\nChosen best K (min BIC):", best_k)
