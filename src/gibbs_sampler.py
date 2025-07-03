@@ -38,8 +38,8 @@ def run_cgs_experiment(W, alpha, num_topics, num_chains, max_iterations, beta, t
     # Define an overall criterion (worst of the two)
     r_hat_overall = max(r_hat_beta, r_hat_theta)
     
-    # Check if convergence was reached
-    converged = monitor_stats.get('max_iterations_reached', False)
+    # Determine convergence based on R-hat threshold
+    converged = r_hat_overall < r_hat_threshold
     
     # Process the chain results
     chain_results = results.get('chain_results', [])

@@ -4,6 +4,7 @@ import multiprocessing as mp
 import time
 import queue
 import logging
+import os
 
 from src.utils.process_manager import ProcessManager, Message, MessageType
 from typing import Optional, List, Dict
@@ -254,7 +255,10 @@ def run_chain(chain_id: int, W: np.ndarray, alpha: np.ndarray,
               control_queue: mp.Queue, 
               sample_freq: int = 10,
               post_convergence_samples: int = 50):
-    """Run a single Gibbs sampling chain."""
+    """Run a single Gibbs sampling chain with independent RNG state."""
+    # Seed NumPy uniquely for this process to avoid identical chains
+    np.random.seed(int(time.time()) + os.getpid() + chain_id)
+
     sampler = GibbsSampler(W, alpha, num_topics)
     runner = ChainRunner(
         chain_id=chain_id,

@@ -7,8 +7,8 @@ from typing import List, Optional, Dict, Tuple
 
 from src.utils.process_manager import ProcessManager, Message, MessageType
 
-# Minimum number of per-chain samples required before computing Gelman–Rubin.
-MIN_SAMPLES_FOR_RHAT = 20
+# Require at least 500 per-chain samples before any Gelman–Rubin calculation
+MIN_SAMPLES_FOR_RHAT = 500
 
 def prepare_chains_array(chain_samples: Dict[str, List[np.ndarray]], 
                         parameter: str,
