@@ -22,8 +22,8 @@ all topics.
 </div>
 
 <div align="center">
-  <em><small><strong>Figure 1:</strong> Plate notation of LFA generative model. M is the number of subjects, D is the number of diseases. All plates (circles) are variables in the generative process, where the plates with shade are the observed variable and plates without shade are unobserved variables to be inferred. θ is the topic weight for all individuals; z is diagnosis-specific topic probability; β is the topic loadings which are Bernoulli probabilities; α is the (non-informative) hyper parameter of the prior distribution of θ.</em>
-</small></div>
+  <em><small><strong>Figure 1:</strong> Plate notation of LFA generative model. M is the number of subjects, D is the number of diseases. All plates (circles) are variables in the generative process, where the plates with shade are the observed variable and plates without shade are unobserved variables to be inferred. θ is the topic weight for all individuals; z is diagnosis-specific topic probability; β is the topic loadings which are Bernoulli probabilities; α is the (non-informative) hyper parameter of the prior distribution of θ.</small></em>
+</div>
 
 For greater detail about the LFA model, see (reference)
 
