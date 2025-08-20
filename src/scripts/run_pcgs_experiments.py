@@ -157,7 +157,8 @@ def run_experiment(args):
         theta=theta,
         window_size=args.window_size,
         r_hat_threshold=args.r_hat_threshold,
-        post_convergence_samples=args.post_convergence_samples
+        post_convergence_samples=args.post_convergence_samples,
+        base_seed=args.seed
     )
     
     # Log final metrics

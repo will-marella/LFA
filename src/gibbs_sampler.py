@@ -6,7 +6,7 @@ from src.experiment.get_metrics import align_chains, merge_chains, align_to_simu
 
 def run_cgs_experiment(W, alpha, num_topics, num_chains, max_iterations, beta, theta, 
                        window_size, r_hat_threshold=1.1, calculate_ess=False, ess_threshold=400,
-                       monitor_params=None, post_convergence_samples=50):
+                       monitor_params=None, post_convergence_samples=50, base_seed=None):
    
     start_time = time.time()
     
@@ -24,7 +24,8 @@ def run_cgs_experiment(W, alpha, num_topics, num_chains, max_iterations, beta, t
         r_hat_threshold=r_hat_threshold,
         calculate_ess=calculate_ess,
         ess_threshold=ess_threshold,
-        post_convergence_samples=post_convergence_samples
+        post_convergence_samples=post_convergence_samples,
+        base_seed=base_seed
     )
 
     end_time = time.time()

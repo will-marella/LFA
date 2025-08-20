@@ -254,10 +254,18 @@ def run_chain(chain_id: int, W: np.ndarray, alpha: np.ndarray,
               final_result_queue: mp.Queue,
               control_queue: mp.Queue, 
               sample_freq: int = 10,
-              post_convergence_samples: int = 50):
+              post_convergence_samples: int = 50,
+              base_seed: int = None):
     """Run a single Gibbs sampling chain with independent RNG state."""
     # Seed NumPy uniquely for this process to avoid identical chains
-    np.random.seed(int(time.time()) + os.getpid() + chain_id)
+    if base_seed is not None:
+        # Use base seed to generate deterministic but different seeds per chain
+        chain_seed = base_seed + chain_id * 1000 + 1
+        np.random.seed(chain_seed)
+        print(f"Chain {chain_id} using seed {chain_seed}")
+    else:
+        # Fallback to original method (but this should be avoided on HPC)
+        np.random.seed(int(time.time()) + os.getpid() + chain_id)
 
     sampler = GibbsSampler(W, alpha, num_topics)
     runner = ChainRunner(
@@ -277,7 +285,8 @@ class GibbsSamplingCoordinator:
                  num_chains: int, max_iterations: Optional[int] = None,
                  window_size: Optional[int] = None, r_hat_threshold: float = 1.1,
                  calculate_ess: bool = False,
-                 ess_threshold: float = 400, post_convergence_samples: int = 50):
+                 ess_threshold: float = 400, post_convergence_samples: int = 50,
+                 base_seed: int = None):
         """Initialize sampling coordinator with configuration parameters."""
         self.W = W
         self.alpha = alpha
@@ -289,6 +298,7 @@ class GibbsSamplingCoordinator:
         self.calculate_ess = calculate_ess
         self.ess_threshold = ess_threshold
         self.post_convergence_samples = post_convergence_samples
+        self.base_seed = base_seed
         
         self._validate_params()
         
@@ -352,7 +362,10 @@ class GibbsSamplingCoordinator:
                     self.max_iterations, self.monitor_queues[i],
                     self.result_queues[i], self.control_queues[i]
                 ),
-                kwargs={'post_convergence_samples': self.post_convergence_samples}
+                kwargs={
+                    'post_convergence_samples': self.post_convergence_samples,
+                    'base_seed': self.base_seed
+                }
             )
             p.start()
             self.chain_processes.append(p)
@@ -403,7 +416,8 @@ def collapsed_gibbs_sampling(W: np.ndarray, alpha: np.ndarray, num_topics: int,
                            window_size: Optional[int] = None, r_hat_threshold: float = 1.1,
                            calculate_ess: bool = False,
                            ess_threshold: float = 400, 
-                           post_convergence_samples: int = 50) -> Dict:
+                           post_convergence_samples: int = 50,
+                           base_seed: int = None) -> Dict:
     """Execute parallel collapsed Gibbs sampling with convergence monitoring."""
     coordinator = GibbsSamplingCoordinator(
         W=W,
@@ -415,7 +429,8 @@ def collapsed_gibbs_sampling(W: np.ndarray, alpha: np.ndarray, num_topics: int,
         r_hat_threshold=r_hat_threshold,
         calculate_ess=calculate_ess,
         ess_threshold=ess_threshold,
-        post_convergence_samples=post_convergence_samples
+        post_convergence_samples=post_convergence_samples,
+        base_seed=base_seed
     )
     results = coordinator.run()
     

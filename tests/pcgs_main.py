@@ -18,8 +18,8 @@ from src.experiment.get_metrics import print_metrics
 # Main block
 if __name__ == '__main__':
     # Simulation parameters
-    M = 40 # Number of subjects
-    D = 20   # Number of diseases (without noise)
+    M = 20 # Number of subjects
+    D = 40   # Number of diseases (without noise)
     num_topics = 10
     seed = 42
     alpha_sim = np.ones(num_topics + 1) / 10
@@ -40,7 +40,7 @@ if __name__ == '__main__':
     alpha = np.ones(num_topics) / 10
 
     # PCGS details
-    num_chains = 4
+    num_chains = 2
     max_iterations = 10000
     window_size = 500
     monitor_params = ['beta', 'theta']
