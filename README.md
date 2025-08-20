@@ -1,9 +1,5 @@
 # Latent Factor Allocation (LFA) for Disease Topic Modeling
 
-<div align="center">
-  <img src="LFA-DGM.jpg" alt="LFA Directed Graphical Model" width="500">
-</div>
-
 > This is a working draft and will be iteratively improved.
 
 A Python package implementing state-of-the-art Bayesian inference algorithms for topic modeling in disease data. This package provides both **Mean Field Variational Inference (MFVI)** and **Partially Collapsed Gibbs Sampling (PCGS)** implementations for discovering latent disease topics and their associations.
@@ -13,6 +9,24 @@ All algorithms are implemented via NumPy and SciPy.
 ## What is Topic-Disease Modeling?
 
 Topic modeling for disease data discovers latent patterns in patient diagnoses by identifying groups of diseases that co-occur. We can use topic models to identify disease clusters, comborbidity patterns, and their risk factors. In particular, by probabilistically assigning individuals to disease topics, we can perform a powerful 'Topic-GWAS' to identify genes underlying the progression of disease topics.
+
+## What is LFA?
+
+Latent Factor Allocation (LFA) is a a Bayesian hierarchical model built to infer latent risk profiles for common diseases. It is adapted from Latent Dirichlet Allocation, considering the case of Bernoulli-defined (binary) outcomes -- disease presence/absence. 
+
+The model assumes there exist a few disease topics that underlie many common diseases. An individual’s risk for each disease is determined by the weights of
+all topics.
+
+<div align="center">
+  <img src="LFA-DGM.jpg" alt="LFA Directed Graphical Model" width="500">
+</div>
+
+<div align="center">
+  <em><small><strong>Figure 1:</strong> Plate notation of LFA generative model. M is the number of subjects, D is the number of diseases. All plates (circles) are variables in the generative process, where the plates with shade are the observed variable and plates without shade are unobserved variables to be inferred. θ is the topic weight for all individuals; z is diagnosis-specific topic probability; β is the topic loadings which are Bernoulli probabilities; α is the (non-informative) hyper parameter of the prior distribution of θ.</em>
+</small></div>
+
+For greater detail about the LFA model, see (reference)
+
 
 ## Available Algorithms in this Package
 
