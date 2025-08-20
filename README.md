@@ -1,28 +1,30 @@
-# LFA: Latent Factor Allocation for Disease Topic Modeling
+# LFA: 
+# Latent Factor Allocation for Disease Topic Modeling
 
-> **⚠️ DRAFT README** - This is a working draft and will be iteratively improved.
+![LFA Directed Graphical Model](LFA-DGM.jpg)
 
-A Python package implementing state-of-the-art Bayesian inference algorithms for topic modeling in disease data. This package provides both **Mean Field Variational Inference (MFVI)** and **Parallel Collapsed Gibbs Sampling (PCGS)** implementations for discovering latent disease topics and their associations.
+> This is a working draft and will be iteratively improved.
 
-## 🔬 What is Topic-Disease Modeling?
+A Python package implementing state-of-the-art Bayesian inference algorithms for topic modeling in disease data. This package provides both **Mean Field Variational Inference (MFVI)** and **Partially Collapsed Gibbs Sampling (PCGS)** implementations for discovering latent disease topics and their associations.
+
+All algorithms are implemented via NumPy and SciPy.
+
+## What is Topic-Disease Modeling?
 
 Topic modeling for disease data discovers latent patterns in patient diagnoses by identifying groups of diseases that co-occur. We can use topic models to identify disease clusters, comborbidity patterns, and their risk factors. In particular, by probabilistically assigning individuals to disease topics, we can perform a powerful 'Topic-GWAS' to identify genes underlying the progression of disease topics.
 
 ## Available Algorithms in this Package
 
 ### Mean Field Variational Inference (MFVI)
-A scalable approximate inference method that:
-- Uses variational optimization to approximate the posterior distribution
-- Tracks Evidence Lower Bound (ELBO) for convergence monitoring
-- Provides fast inference suitable for large datasets
-- Offers deterministic results with convergence guarantees
+A scalable approximate inference method that provides fast inference suitable for large datasets.
 
-### Parallel Collapsed Gibbs Sampling (PCGS) 
-A robust MCMC method that:
-- Uses multiple parallel chains for improved convergence diagnostics
-- Implements R-hat statistics for convergence assessment
-- Provides full posterior samples and uncertainty quantification
-- Includes automated convergence detection
+MFVI uses variational optimization to approximate the posterior distribution. The Evidence Lower Bound (ELBO) is maximized, and is tracked to monitor convergence.
+
+
+### Partially Collapsed Gibbs Sampling (PCGS) 
+A robust markov-chain monte carlo method that is suitable for small datasets.
+
+PCGS samples from a conditional distribution to exactly approach the posterior distribution. The implementation runs multiple chains which are used to monitor convergence (via Gelman-Rubin statistic) and are averaged once samples are collected.
 
 ## Installation
 
@@ -32,19 +34,9 @@ A robust MCMC method that:
 
 ### From Source
 ```bash
-git clone <repository-url>
+git clone https://github.com/will-marella/LFA
 cd LFA
 pip install -e .
-```
-
-### Environment Setup
-```bash
-# Using conda
-conda env create -f environment.yml
-conda activate <env-name>
-
-# Or using pip
-pip install numpy scipy matplotlib seaborn pandas
 ```
 
 ## Quick Start
@@ -99,28 +91,8 @@ print(f"R-hat overall: {metrics['r_hat_overall']:.4f}")
 print(f"Converged: {metrics['converged']}")
 ```
 
-### Running Experiments
-Use the provided scripts for systematic experimentation:
 
-```bash
-# MFVI experiments
-python src/scripts/run_mfvi_experiments.py \
-    --M 5000 --D 20 --K 3 \
-    --seed 42 \
-    --results_dir ./results \
-    --experiment_tag "pilot_study"
-
-# PCGS experiments  
-python src/scripts/run_pcgs_experiments.py \
-    --M 5000 --D 20 --K 3 \
-    --num_chains 3 \
-    --max_iterations 2000 \
-    --seed 42 \
-    --results_dir ./results \
-    --experiment_tag "pilot_study"
-```
-
-## 📊 Data Format
+## Data Format
 
 ### Input Data (W matrix)
 - **Shape**: `(M, D)` where M = subjects, D = diseases
