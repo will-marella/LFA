@@ -1,7 +1,8 @@
-# LFA: 
-# Latent Factor Allocation for Disease Topic Modeling
+# Latent Factor Allocation (LFA) for Disease Topic Modeling
 
-![LFA Directed Graphical Model](LFA-DGM.jpg)
+<div align="center">
+  <img src="LFA-DGM.jpg" alt="LFA Directed Graphical Model" width="500">
+</div>
 
 > This is a working draft and will be iteratively improved.
 
