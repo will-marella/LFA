@@ -133,4 +133,4 @@ print(f"Converged: {metrics['converged']}")
 - **θ (theta)**: Subject-topic proportions `(M, K)`
 - **z**: Topic assignments `(M, D)` (discrete) or `(M, D, K)` (probabilistic)
 
-**Note**: This README is actively being developed. Feedback and contributions are welcome!
+**Note**: This README is actively being developed. Please open an issue to provide feedback.
