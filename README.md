@@ -116,10 +116,15 @@ print(f"Converged: {metrics['converged']}")
 - **Type**: Binary matrix (0/1) indicating presence/absence of each disease
 - **Example**:
   ```python
-  # Patient 0 has diseases 1, 3, 5
-  # Patient 1 has diseases 2, 7
-  W[0, [1, 3, 5]] = 1
-  W[1, [2, 7]] = 1
+  # For 3 patients and 8 diseases, W might look like:
+  W = np.array([
+      [0, 1, 0, 1, 0, 1, 0, 0],  # Patient 0: has diseases 1, 3, 5
+      [0, 0, 1, 0, 0, 0, 0, 1],  # Patient 1: has diseases 2, 7  
+      [1, 1, 0, 0, 1, 0, 0, 0]   # Patient 2: has diseases 0, 1, 4
+  ])
+  
+  # Alternatively, you can set values using:
+  W[0, [1, 3, 5]] = 1  # Set multiple diseases for patient 0
   ```
 
 ### Model Parameters
