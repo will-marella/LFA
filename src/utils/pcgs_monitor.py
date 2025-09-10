@@ -89,7 +89,9 @@ def compute_gelman_rubin(chain_samples, parameter, window_size=None):
         R_hat = np.sqrt(var_hat / (W + epsilon))
         R_hat = np.nan_to_num(R_hat, nan=np.inf)
     
-    return np.max(R_hat)
+    # Swap max for 95th percentile to see if it resolves the issue
+    # return np.max(R_hat)
+    return np.quantile(R_hat, 0.95)
    
 
 
