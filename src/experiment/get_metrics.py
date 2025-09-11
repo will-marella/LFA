@@ -48,10 +48,13 @@ def align_chains(results):
             aligned_z = np.array([[col_ind[z] for z in row] for row in z_sample])
             aligned_z_samples.append(aligned_z)
 
+        # Correctly align theta_samples (permute topic columns)
+        aligned_theta_samples = [theta[:, col_ind] for theta in results[i]['theta_samples']]
+
         aligned_results.append({
             'beta_samples': aligned_beta_samples,
             'z_samples': aligned_z_samples,
-            'theta_samples': results[i]['theta_samples']
+            'theta_samples': aligned_theta_samples
         })
 
     return aligned_results

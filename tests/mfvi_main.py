@@ -1,3 +1,10 @@
+import pathlib, sys, os
+
+# Ensure LFA root is on PYTHONPATH when script run from repo root
+_LFA_ROOT = pathlib.Path(__file__).resolve().parents[1]
+if str(_LFA_ROOT) not in sys.path:
+    sys.path.insert(0, str(_LFA_ROOT))
+
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -8,8 +15,8 @@ from src.experiment.get_metrics import print_mfvi_metrics
 
 if __name__ == '__main__':
     # Simulation parameters
-    M = 4000  # Number of subjects
-    D = 20  # Number of diseases (without noise)
+    M = 500  # Number of subjects
+    D = 40  # Number of diseases (without noise)
     num_topics = 10
     seed = 42
     alpha_sim = np.ones(num_topics + 1) / 10
@@ -31,8 +38,8 @@ if __name__ == '__main__':
     alpha = np.ones(num_topics) / 10
 
     # MFVI details
-    max_iterations = 20000
-    convergence_threshold = 1e-6
+    max_iterations = 5000
+    convergence_threshold = 0.01
 
     # Run the experiment
     result, metrics = run_mfvi_experiment(
