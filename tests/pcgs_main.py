@@ -18,8 +18,8 @@ from src.experiment.get_metrics import print_metrics
 # Main block
 if __name__ == '__main__':
     # Simulation parameters
-    M = 20 # Number of subjects
-    D = 40   # Number of diseases (without noise)
+    M = 1000 # Number of subjects
+    D = 10   # Number of diseases (without noise)
     num_topics = 10
     seed = 42
     alpha_sim = np.ones(num_topics + 1) / 10

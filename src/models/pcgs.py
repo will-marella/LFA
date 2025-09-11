@@ -24,28 +24,73 @@ def initialize(W, num_topics):
     return z, n
 
 
-def update_beta(W, z, num_topics):
-    counts = np.zeros((num_topics, W.shape[1]))
+def update_beta(W, z, num_topics, a: float = 0.5, b: float = 0.5):
+    """
+    Proper MCMC update: sample beta[k, j] ~ Beta(a + count_1, b + count_0),
+    where counts are computed per disease j and topic k using leave-one-out z.
+
+    a, b: Beta prior hyperparameters (light smoothing by default).
+    """
+    M, D = W.shape
+    beta = np.zeros((num_topics, D), dtype=float)
 
     for k in range(num_topics):
-        # Filter W where the topic assignment z equals k
-        indices = np.where(z == k)[0]
-        filtered_W = W[indices, :]  # Ensure this slices as a matrix
-        counts[k] = filtered_W.sum(axis=0)
+        mask_k = (z == k)                     # (M, D)
+        count_tot = mask_k.sum(axis=0)        # (D,)
+        count_1 = (mask_k * W).sum(axis=0)    # (D,)
+        count_0 = count_tot - count_1         # (D,)
 
-    total_counts = counts.sum(axis=1)
-    subject_counts = np.array([len(np.where(z == k)[0]) for k in range(num_topics)])
+        # Prior-only draw when no assignments for (k, j)
+        a_post = a + count_1
+        b_post = b + count_0
 
+        # Sample from Beta posterior per disease
+        # Handle zero-assignments robustly by falling back to Beta(a, b)
+        draws = np.random.beta(a_post, b_post, size=D)
+        need_prior = (count_tot == 0)
+        if np.any(need_prior):
+            draws[need_prior] = np.random.beta(a, b, size=need_prior.sum())
 
-    # Handle division by zero and update beta
-    beta = np.zeros_like(counts)
-    for k in range(num_topics):
-        if total_counts[k] == 0:
-            beta[k] = np.ones(W.shape[1]) * 0.1  # Handling division by zero with a default small number
-        else:
-            beta[k] = counts[k] / subject_counts[k]
+        beta[k, :] = draws
 
     return beta
+
+# --- Previous implementations retained for reference ---
+# Deterministic posterior-mean (smoothed) beta update.
+# Safer than the original, but EM-like and not proper MCMC.
+# def update_beta_mean(W, z, num_topics, a: float = 0.5, b: float = 0.5):
+#     M, D = W.shape
+#     beta = np.zeros((num_topics, D), dtype=float)
+#     for k in range(num_topics):
+#         mask_k = (z == k)
+#         count_tot = mask_k.sum(axis=0)
+#         count_1 = (mask_k * W).sum(axis=0)
+#         denom = count_tot + a + b
+#         num = count_1 + a
+#         with np.errstate(divide='ignore', invalid='ignore'):
+#             beta_k = num / denom
+#             prior_mean = a / (a + b)
+#             beta_k = np.where(count_tot == 0, prior_mean, beta_k)
+#         beta[k, :] = beta_k
+#     return beta
+
+# Original (BUGGY) implementation — aggregated whole rows and mixed diseases.
+# Kept for historical reference; do not use.
+# def update_beta_buggy(W, z, num_topics):
+#     counts = np.zeros((num_topics, W.shape[1]))
+#     for k in range(num_topics):
+#         indices = np.where(z == k)[0]
+#         filtered_W = W[indices, :]
+#         counts[k] = filtered_W.sum(axis=0)
+#     total_counts = counts.sum(axis=1)
+#     subject_counts = np.array([len(np.where(z == k)[0]) for k in range(num_topics)])
+#     beta = np.zeros_like(counts)
+#     for k in range(num_topics):
+#         if total_counts[k] == 0:
+#             beta[k] = np.ones(W.shape[1]) * 0.1
+#         else:
+#             beta[k] = counts[k] / subject_counts[k]
+#     return beta
 
 def update_theta(n, alpha):
    
@@ -79,21 +124,30 @@ class GibbsSampler:
         self.beta = update_beta(W, self.z, num_topics)
         
     def run_iteration(self) -> dict:
-        """Run a single Gibbs sampling iteration."""
+        """Run a single Gibbs sampling iteration: sweep z with fixed beta, then sample beta."""
+        # Sweep over subjects and diseases updating z (leave-one-out counts)
         for s in range(self.W.shape[0]):
             self._update_topic_assignments(s)
+        # After full sweep, resample beta from its posterior
+        self.beta = update_beta(self.W, self.z, self.num_topics)
         return self._get_current_state()
     
     def _update_topic_assignments(self, subject: int):
-        """Update topic assignments for a single subject."""
-        self.beta = update_beta(self.W, self.z, self.num_topics)
-        p = np.array([compute_conditional(subject, j, self.W, self.n, self.alpha, self.beta) 
-                     for j in range(self.W.shape[1])])
-        
+        """Update topic assignments for a single subject using leave-one-out counts.
+
+        Keeps beta fixed during the sweep; recomputes conditional per disease after
+        decrementing the old assignment (true leave-one-out).
+        """
         for j in range(self.W.shape[1]):
             k_old = self.z[subject, j]
+            # Remove current token's contribution (leave-one-out)
             self.n[subject, k_old] -= 1
-            k_new = choice(np.arange(self.num_topics), p=p[j])
+
+            # Compute conditional with updated counts
+            p = compute_conditional(subject, j, self.W, self.n, self.alpha, self.beta)
+
+            # Sample new assignment and update counts
+            k_new = choice(np.arange(self.num_topics), p=p)
             self.z[subject, j] = k_new
             self.n[subject, k_new] += 1
     

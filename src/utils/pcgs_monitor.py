@@ -4,6 +4,7 @@ import time
 import multiprocessing as mp
 from queue import Empty
 from typing import List, Optional, Dict, Tuple
+import warnings
 
 from src.utils.process_manager import ProcessManager, Message, MessageType
 
@@ -98,7 +99,12 @@ def compute_gelman_rubin(chain_samples, parameter, window_size=None):
 def compute_effective_sample_size(samples: Dict[str, List[np.ndarray]], 
                                 parameter: str,
                                 window_size: Optional[int] = None) -> float:
-    """Compute effective sample size using autocorrelation method."""
+    """Deprecated: ESS calculation is known to be incorrect (mixes chains).
+
+    This function is retained only for backward compatibility and will be removed
+    in a future cleanup. Do not rely on the returned value.
+    """
+    warnings.warn("ESS computation is deprecated and known to be incorrect; do not rely on it.", DeprecationWarning)
     chains_array = prepare_chains_array(samples, parameter, window_size, thin=1)
     n_chains, n_samples, n_dims = chains_array.shape
     
@@ -370,4 +376,3 @@ class ChainMonitor:
                 any(state.current_iteration >= self.max_iterations 
                     for state in self.chain_states.values()))
         }
-
