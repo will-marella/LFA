@@ -15,7 +15,7 @@ from src.experiment.get_metrics import print_mfvi_metrics
 
 if __name__ == '__main__':
     # Simulation parameters
-    M = 500  # Number of subjects
+    M = 50  # Number of subjects
     D = 40  # Number of diseases (without noise)
     num_topics = 10
     seed = 42
@@ -38,8 +38,8 @@ if __name__ == '__main__':
     alpha = np.ones(num_topics) / 10
 
     # MFVI details
-    max_iterations = 5000
-    convergence_threshold = 0.01
+    max_iterations = 1000
+    convergence_threshold = 0.0
 
     # Run the experiment
     result, metrics = run_mfvi_experiment(
@@ -68,21 +68,25 @@ if __name__ == '__main__':
     plt.show()
 
     # ELBO convergence plot
-    plt.figure(figsize=(10, 6))
-    plt.plot(metrics['elbo_history'])
-    plt.title('ELBO Convergence')
-    plt.xlabel('Iteration')
-    plt.ylabel('ELBO')
-    plt.grid(True)
-    plt.show()
+    elbo_history = result.get('elbo_history', [])
+    if elbo_history:
+        plt.figure(figsize=(10, 6))
+        plt.plot(elbo_history)
+        plt.title('ELBO Convergence')
+        plt.xlabel('Iteration')
+        plt.ylabel('ELBO')
+        plt.grid(True)
+        plt.show()
 
     # Parameter changes plot
-    plt.figure(figsize=(10, 6))
-    for param, changes in metrics['parameter_changes'].items():
-        plt.plot(changes, label=param)
-    plt.title('Parameter Changes Over Iterations')
-    plt.xlabel('Iteration')
-    plt.ylabel('Average Absolute Change')
-    plt.legend()
-    plt.grid(True)
-    plt.show() 
+    parameter_changes = metrics.get('parameter_changes', {})
+    if parameter_changes:
+        plt.figure(figsize=(10, 6))
+        for param, changes in parameter_changes.items():
+            plt.plot(changes, label=param)
+        plt.title('Parameter Changes Over Iterations')
+        plt.xlabel('Iteration')
+        plt.ylabel('Average Absolute Change')
+        plt.legend()
+        plt.grid(True)
+        plt.show()

@@ -17,10 +17,16 @@ def parse_args():
     parser.add_argument('--K', type=int, required=True, help='Number of topics (excluding healthy topic)')
     parser.add_argument('--topic_prob', type=float, default=0.30, help='Topic-associated probability')
     parser.add_argument('--nontopic_prob', type=float, default=0.01, help='Non-topic-associated probability')
+    parser.add_argument('--alpha_sim', type=float, default=0.1,
+                        help='Dirichlet concentration parameter used for simulation')
     
     # Algorithm parameters
     parser.add_argument('--max_iterations', type=int, default=2000)
     parser.add_argument('--convergence_threshold', type=float, default=1e-6)
+    parser.add_argument('--fixed_iterations', action='store_true',
+                        help='Disable ELBO-based stopping and run for max_iterations')
+    parser.add_argument('--delta_tail_window', type=int, default=50,
+                        help='Tail window size for averaging ELBO changes when using fixed iterations')
     
     # Experiment parameters
     parser.add_argument('--seed', type=int, required=True)
@@ -44,9 +50,12 @@ def flatten_metrics(metrics, args):
         'K': args.K,
         'topic_prob': args.topic_prob,
         'nontopic_prob': args.nontopic_prob,
+        'alpha_sim': args.alpha_sim,
         'max_iterations': args.max_iterations,
         'convergence_threshold': args.convergence_threshold,
-        
+        'fixed_iterations': args.fixed_iterations,
+        'delta_tail_window': args.delta_tail_window,
+
         # Results
         'num_iterations': metrics['num_iterations'],
         'final_elbo': metrics['final_elbo'],
@@ -55,7 +64,8 @@ def flatten_metrics(metrics, args):
         'beta_mse': metrics['beta_mse'],
         'theta_mse': metrics['theta_mse'],
         'run_time': metrics['run_time'],
-        'converged': metrics['num_iterations'] < args.max_iterations
+        'mean_elbo_delta_tail': metrics.get('mean_elbo_delta_tail'),
+        'converged': metrics['converged']
     }
     return row
 
@@ -103,10 +113,10 @@ def run_experiment(args):
         K=args.K,
         topic_associated_prob=args.topic_prob,
         nontopic_associated_prob=args.nontopic_prob,
-        alpha=np.ones(args.K + 1) / 10,
+        alpha=np.ones(args.K + 1) * args.alpha_sim,
         include_healthy_topic=True
     )
-    
+
     # Run MFVI
     result, metrics = run_mfvi_experiment(
         W=W,
@@ -115,9 +125,11 @@ def run_experiment(args):
         beta=beta,
         theta=theta,
         max_iterations=args.max_iterations,
-        convergence_threshold=args.convergence_threshold
+        convergence_threshold=args.convergence_threshold,
+        fixed_iterations=args.fixed_iterations,
+        delta_tail_window=args.delta_tail_window
     )
-    
+
     return flatten_metrics(metrics, args)
 
 def main():

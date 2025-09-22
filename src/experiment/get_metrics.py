@@ -254,4 +254,6 @@ def print_mfvi_metrics(metrics):
     print("Theta correlation:", metrics['theta_correlation'])
     print("Beta MSE:", metrics['beta_mse'])
     print("Theta MSE:", metrics['theta_mse'])
+    if metrics.get('mean_elbo_delta_tail') is not None:
+        print("Mean |ΔELBO| (tail):", metrics['mean_elbo_delta_tail'])
     print("Run-time:", metrics['run_time'], "seconds")

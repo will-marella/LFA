@@ -20,6 +20,8 @@ def parse_args():
     parser.add_argument('--K', type=int, required=True, help='Number of topics (excluding healthy topic)')
     parser.add_argument('--topic_prob', type=float, default=0.30, help='Topic-associated probability')
     parser.add_argument('--nontopic_prob', type=float, default=0.01, help='Non-topic-associated probability')
+    parser.add_argument('--alpha_sim', type=float, default=0.1,
+                        help='Dirichlet concentration parameter used for simulation')
     
     # Algorithm parameters
     parser.add_argument('--num_chains', type=int, default=2, help='Number of parallel chains')
@@ -77,6 +79,7 @@ def flatten_metrics(metrics, args):
         'K': args.K,
         'topic_prob': args.topic_prob,
         'nontopic_prob': args.nontopic_prob,
+        'alpha_sim': args.alpha_sim,
         'num_chains': args.num_chains,
         'max_iterations': args.max_iterations,
         'window_size': args.window_size,
@@ -141,10 +144,10 @@ def run_experiment(args):
         K=args.K,
         topic_associated_prob=args.topic_prob,
         nontopic_associated_prob=args.nontopic_prob,
-        alpha=np.ones(args.K + 1) / 10,
+        alpha=np.ones(args.K + 1) * args.alpha_sim,
         include_healthy_topic=True
     )
-    
+
     # Run PCGS
     logging.info(f"Starting PCGS with {args.num_chains} chains, max_iterations={args.max_iterations}, r_hat_threshold={args.r_hat_threshold}")
     result, metrics = run_cgs_experiment(

@@ -5,8 +5,9 @@ from src.models.mfvi_model import MFVIModel
 from src.utils.mfvi_monitor import ELBOMonitor
 from src.experiment.get_metrics import align_mfvi_results, compute_mfvi_metrics
 
-def run_mfvi_experiment(W, alpha, num_topics, beta, theta, 
-                       max_iterations=1000, convergence_threshold=1e-4):
+def run_mfvi_experiment(W, alpha, num_topics, beta, theta,
+                       max_iterations=1000, convergence_threshold=1e-4,
+                       fixed_iterations=False, delta_tail_window=50):
     """
     Run MFVI experiment with convergence monitoring.
     
@@ -23,7 +24,12 @@ def run_mfvi_experiment(W, alpha, num_topics, beta, theta,
     
     # Initialize model and monitor
     model = MFVIModel(W, alpha, num_topics)
-    monitor = ELBOMonitor(convergence_threshold, max_iterations)
+    monitor = ELBOMonitor(
+        convergence_threshold=convergence_threshold,
+        max_iterations=max_iterations,
+        force_max_iterations=fixed_iterations,
+        delta_tail_window=delta_tail_window
+    )
     
     # Run iterations until convergence
     while True:
@@ -59,7 +65,9 @@ def run_mfvi_experiment(W, alpha, num_topics, beta, theta,
     metrics = compute_mfvi_metrics(result, beta, theta)
     metrics.update({
         'run_time': run_time,
-        'parameter_changes': convergence_stats['parameter_changes']
+        'parameter_changes': convergence_stats['parameter_changes'],
+        'mean_elbo_delta_tail': convergence_stats.get('mean_elbo_delta_tail'),
+        'converged': convergence_stats['converged']
     })
-    
-    return result, metrics 
+
+    return result, metrics
