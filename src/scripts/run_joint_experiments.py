@@ -4,7 +4,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -69,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def setup_logging(log_file: str | None) -> None:
+def setup_logging(log_file: Optional[str]) -> None:
     log_format = '%(asctime)s - %(levelname)s - %(message)s'
     date_format = '%Y-%m-%d %H:%M:%S'
 
@@ -124,8 +124,8 @@ def get_bool(config_row: pd.Series, key: str, default: bool) -> bool:
     return bool(value)
 
 
-def parse_seed_range(config_row: pd.Series, seed_start: int | None,
-                     seed_end: int | None) -> Iterable[int]:
+def parse_seed_range(config_row: pd.Series, seed_start: Optional[int],
+                     seed_end: Optional[int]) -> Iterable[int]:
     if seed_start is None:
         seed_start = int(get_value(config_row, 'seed_start', 1))
     if seed_end is None:

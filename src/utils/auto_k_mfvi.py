@@ -125,7 +125,7 @@ def select_k_mfvi(
     W: np.ndarray,
     candidate_Ks: List[int],
     *,
-    alpha: np.ndarray | None = None,
+    alpha: Optional[np.ndarray] = None,
     n_folds: int = 5,
     max_iterations: int = 2000,
     convergence_threshold: float = 1e-6,
