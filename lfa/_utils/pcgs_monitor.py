@@ -6,7 +6,7 @@ from queue import Empty
 from typing import List, Optional, Dict, Tuple
 import warnings
 
-from src.utils.process_manager import ProcessManager, Message, MessageType
+from lfa._utils.process_manager import ProcessManager, Message, MessageType
 
 # Require at least 500 per-chain samples before any Gelman–Rubin calculation
 MIN_SAMPLES_FOR_RHAT = 500

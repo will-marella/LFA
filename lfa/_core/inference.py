@@ -8,11 +8,11 @@ import time
 import numpy as np
 from typing import Optional, Dict, Any, List
 
-from src.models.mfvi_model import MFVIModel
-from src.models.pcgs import collapsed_gibbs_sampling
-from src.utils.mfvi_monitor import ELBOMonitor
-from src.experiment.get_metrics import align_chains, merge_chains
-from src.core.results import LFAResult
+from lfa._models.mfvi_model import MFVIModel
+from lfa._models.pcgs import collapsed_gibbs_sampling
+from lfa._utils.mfvi_monitor import ELBOMonitor
+from lfa._experiment.get_metrics import align_chains, merge_chains
+from lfa._core.results import LFAResult
 
 
 def run_mfvi_inference(
@@ -264,7 +264,7 @@ def run_pcgs_inference(
     result = LFAResult(
         beta=merged_result['beta'],
         theta=merged_result['theta'],
-        z=merged_result['z'],
+        z=merged_result['z_distribution'],  # PCGS returns 'z_distribution'
         num_topics=num_topics - 1,  # Exclude healthy topic from user-facing count
         algorithm='pcgs',
         convergence_info=convergence_info,

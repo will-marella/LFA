@@ -13,8 +13,7 @@ _LFA_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(_LFA_ROOT) not in sys.path:
     sys.path.insert(0, str(_LFA_ROOT))
 
-from src.lfa import fit_lfa, select_num_topics
-from src.experiment.simulation import simulate_topic_disease_data
+from lfa import fit_lfa, select_num_topics, simulate_topic_disease_data
 
 
 def test_fit_lfa_mfvi_basic():

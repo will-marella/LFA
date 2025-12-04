@@ -6,9 +6,9 @@ import queue
 import logging
 import os
 
-from src.utils.process_manager import ProcessManager, Message, MessageType
+from lfa._utils.process_manager import ProcessManager, Message, MessageType
 from typing import Optional, List, Dict
-from src.utils.pcgs_monitor import monitor_convergence
+from lfa._utils.pcgs_monitor import monitor_convergence
 
 
 

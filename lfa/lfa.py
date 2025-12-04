@@ -8,9 +8,9 @@ import numpy as np
 import warnings
 from typing import Union, Optional, List, Tuple, Dict, Any
 
-from src.core.inference import run_mfvi_inference, run_pcgs_inference
-from src.core.results import LFAResult
-from src.utils.auto_k_mfvi import select_k_mfvi
+from lfa._core.inference import run_mfvi_inference, run_pcgs_inference
+from lfa._core.results import LFAResult
+from lfa._utils.auto_k_mfvi import select_k_mfvi
 
 
 def fit_lfa(

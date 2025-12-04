@@ -4,7 +4,7 @@ MFVI LFA model via cross-validation.
 
 Typical usage
 -------------
->>> from src.utils.auto_k_mfvi import select_k_mfvi
+>>> from lfa._utils.auto_k_mfvi import select_k_mfvi
 >>> best_k, results = select_k_mfvi(W_binary, candidate_Ks=[5, 10, 15])
 
 The function is intentionally dependency-free (no sklearn) and works on any
@@ -19,9 +19,9 @@ from typing import List, Tuple, Dict, Any
 
 import numpy as np
 
-from src.utils.mfvi_eval import infer_theta_single_row, compute_perplexity
-from src.models.mfvi_model import MFVIModel
-from src.utils.mfvi_monitor import ELBOMonitor
+from lfa._utils.mfvi_eval import infer_theta_single_row, compute_perplexity
+from lfa._models.mfvi_model import MFVIModel
+from lfa._utils.mfvi_monitor import ELBOMonitor
 
 __all__ = ["select_k_mfvi"]
 
