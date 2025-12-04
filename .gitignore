@@ -36,3 +36,5 @@ dist/
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb
+
+AGENTS.md
