@@ -234,8 +234,11 @@ def align_mfvi_results(result, simulated_beta):
     # Align estimated_beta to simulated_beta using the Hungarian algorithm
     row_ind, col_ind = linear_sum_assignment(cost_matrix)
     
+    # Create the topic mapping
+    topic_mapping = {est: sim for est, sim in zip(row_ind, col_ind)}
+    
     # Create a reverse mapping to reorder the matrices
-    reorder_mapping = {sim: est for est, sim in zip(row_ind, col_ind)}
+    reorder_mapping = {sim: est for est, sim in topic_mapping.items()}
     reorder_indices = [reorder_mapping[i] for i in range(len(reorder_mapping))]
     
     # Reorder the matrices
