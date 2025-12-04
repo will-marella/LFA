@@ -251,9 +251,80 @@ Print a human-readable summary of the fitted model.
 result.summary()
 ```
 
-#### `to_dict()`
+#### `get_top_diseases_per_topic(n=10, use_names=True, exclude_healthy=True)`
+
+Get the top N diseases most associated with each topic. **Primary method for interpreting what each topic represents.**
+
+**Parameters:**
+- `n` (int): Number of top diseases to return per topic (default: 10)
+- `use_names` (bool): Return disease names vs indices (default: True)
+- `exclude_healthy` (bool): Exclude healthy topic from results (default: True)
+
+**Returns:**
+- `dict`: Maps topic index → list of (disease, probability) tuples, sorted by probability descending
+
+**Example:**
+```python
+top_diseases = result.get_top_diseases_per_topic(n=5)
+for topic_idx, diseases in top_diseases.items():
+    print(f"Topic {topic_idx}:")
+    for disease, prob in diseases:
+        print(f"  {disease}: {prob:.3f}")
+```
+
+**Output:**
+```
+Topic 1:
+  Diabetes: 0.856
+  Hypertension: 0.723
+  Obesity: 0.691
+  Heart Disease: 0.645
+  Stroke: 0.589
+Topic 2:
+  Asthma: 0.912
+  COPD: 0.834
+  Bronchitis: 0.721
+  ...
+```
+
+#### `get_disease_topic_loadings(disease_name=None, disease_idx=None)`
+
+Get topic loadings (beta) for a specific disease. Shows which topics are most strongly associated with this disease.
+
+**Parameters:**
+- `disease_name` (str or int): Name/ID of disease (must exist in disease_names)
+- `disease_idx` (int): Index of disease (0-based) - alternative to disease_name
+
+**Returns:**
+- `np.ndarray`, shape `(K+1,)`: Topic probabilities for this disease. Entry [k] is beta[k, disease]. Includes healthy topic at index 0.
+
+**Example:**
+```python
+# By name
+loadings = result.get_disease_topic_loadings(disease_name='Diabetes')
+print(f"Diabetes is most associated with topic {loadings.argmax()}")
+
+# By index
+loadings = result.get_disease_topic_loadings(disease_idx=0)
+
+# Exclude healthy topic
+disease_topics = loadings[1:]  # Skip index 0 (healthy topic)
+strongest_topic = disease_topics.argmax() + 1
+print(f"Strongest disease topic: {strongest_topic}")
+```
+
+**Output:**
+```
+Diabetes is most associated with topic 2
+Strongest disease topic: 2
+```
+
+#### `to_dict(include_chains=True)`
 
 Convert result to dictionary for saving/serialization.
+
+**Parameters:**
+- `include_chains` (bool): Include per-chain results for PCGS (default: True)
 
 ```python
 data = result.to_dict()

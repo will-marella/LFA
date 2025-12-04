@@ -232,6 +232,143 @@ class LFAResult:
                 f"num_diseases={self.num_diseases}, "
                 f"num_topics={self.num_topics})")
     
+    def get_top_diseases_per_topic(
+        self, 
+        n: int = 10, 
+        use_names: bool = True,
+        exclude_healthy: bool = True
+    ) -> Dict[int, List[tuple]]:
+        """
+        Get the top N diseases most associated with each topic.
+        
+        This is the primary method for interpreting what each disease topic
+        represents. Diseases are ranked by their probability beta[k, d] for
+        each topic k.
+        
+        Parameters
+        ----------
+        n : int, default=10
+            Number of top diseases to return per topic
+        use_names : bool, default=True
+            If True, return disease names; if False, return disease indices
+        exclude_healthy : bool, default=True
+            If True, exclude the healthy topic (topic 0) from results
+        
+        Returns
+        -------
+        dict
+            Dictionary mapping topic index to list of (disease, probability) tuples.
+            Topics are sorted by index. Within each topic, diseases are sorted
+            by probability (highest first).
+        
+        Examples
+        --------
+        >>> result = fit_lfa(W, num_topics=3, algorithm='mfvi')
+        >>> top_diseases = result.get_top_diseases_per_topic(n=5)
+        >>> for topic_idx, diseases in top_diseases.items():
+        ...     print(f"Topic {topic_idx}:")
+        ...     for disease, prob in diseases:
+        ...         print(f"  {disease}: {prob:.3f}")
+        Topic 1:
+          Diabetes: 0.856
+          Hypertension: 0.723
+          Obesity: 0.691
+          ...
+        """
+        results = {}
+        
+        # Determine topic range
+        start_topic = 1 if exclude_healthy else 0
+        
+        for k in range(start_topic, self.beta.shape[0]):
+            # Get probabilities for this topic
+            topic_probs = self.beta[k, :]
+            
+            # Get top N disease indices (sorted descending)
+            top_indices = np.argsort(topic_probs)[-n:][::-1]
+            
+            # Build list of (disease, probability) tuples
+            if use_names:
+                top_items = [
+                    (self.disease_names[i], topic_probs[i]) 
+                    for i in top_indices
+                ]
+            else:
+                top_items = [
+                    (i, topic_probs[i]) 
+                    for i in top_indices
+                ]
+            
+            # Use 1-indexed topic labels for user-facing output (skip healthy topic)
+            topic_label = k if not exclude_healthy else k
+            results[topic_label] = top_items
+        
+        return results
+    
+    def get_disease_topic_loadings(
+        self,
+        disease_name: Optional[Union[str, int]] = None,
+        disease_idx: Optional[int] = None
+    ) -> np.ndarray:
+        """
+        Get topic loadings (beta) for a specific disease.
+        
+        Shows which topics are most strongly associated with this disease.
+        Useful for understanding the latent structure explaining a particular
+        condition.
+        
+        Parameters
+        ----------
+        disease_name : str or int, optional
+            Name or ID of disease (must exist in disease_names)
+        disease_idx : int, optional
+            Index of disease (0-based)
+        
+        Returns
+        -------
+        np.ndarray, shape (K+1,)
+            Topic probabilities for this disease. Entry [k] is beta[k, disease].
+            Includes healthy topic at index 0.
+        
+        Raises
+        ------
+        ValueError
+            If neither or both parameters provided, or if disease not found
+        
+        Examples
+        --------
+        >>> result = fit_lfa(W, num_topics=3, algorithm='mfvi')
+        >>> loadings = result.get_disease_topic_loadings(disease_name='Diabetes')
+        >>> print(f"Diabetes is most associated with topic {loadings.argmax()}")
+        Diabetes is most associated with topic 2
+        
+        >>> # Get probabilities excluding healthy topic
+        >>> disease_loadings = loadings[1:]  # Skip index 0 (healthy topic)
+        >>> print(f"Strongest disease topic: {disease_loadings.argmax() + 1}")
+        Strongest disease topic: 2
+        """
+        # Validate inputs
+        if disease_name is None and disease_idx is None:
+            raise ValueError("Must provide either disease_name or disease_idx")
+        if disease_name is not None and disease_idx is not None:
+            raise ValueError("Cannot provide both disease_name and disease_idx")
+        
+        # Resolve to index
+        if disease_name is not None:
+            try:
+                idx = self.disease_names.index(disease_name)  # type: ignore
+            except ValueError:
+                raise ValueError(f"Disease '{disease_name}' not found in disease_names. "
+                               f"Available diseases: {self.disease_names}")
+        else:
+            # disease_idx provided
+            if disease_idx is not None and (disease_idx < 0 or disease_idx >= self.num_diseases):
+                raise ValueError(f"disease_idx {disease_idx} out of range [0, {self.num_diseases})")
+            idx = disease_idx
+        
+        # Return beta[:, idx]
+        return self.beta[:, idx].copy()
+    
     def to_dict(self, include_chains=True) -> Dict[str, Any]:
         """
         Convert result to dictionary for serialization.
