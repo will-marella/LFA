@@ -1,6 +1,38 @@
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+*.so
+
 # Virtual environment
 venv/
 .venv/
 env/
 .env/
-AGENTS.md
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+.cursorignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test outputs and results
+test_output/
+results/
+*.csv
+!requirements.txt
+
+# Build artifacts
+build/
+dist/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
