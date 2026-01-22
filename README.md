@@ -1,6 +1,7 @@
 # Latent Factor Allocation (LFA) for Disease Topic Modeling
 
-> This is a working draft and will be iteratively improved.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
 A Python package implementing state-of-the-art Bayesian inference algorithms for topic modeling in disease data. This package provides both **Mean Field Variational Inference (MFVI)** and **Partially Collapsed Gibbs Sampling (PCGS)** implementations for discovering latent disease topics and their associations.
 
@@ -27,7 +28,7 @@ all topics.
 
 <br>
 
-For greater detail about the LFA model, see (reference)
+For greater detail about the LFA model, see Zhang et al. (2023) [1].
 
 
 ## Available Algorithms in this Package
@@ -60,52 +61,59 @@ pip install -e .
 
 ### Basic MFVI Example
 ```python
-import numpy as np
-from src.experiment.simulation import simulate_topic_disease_data
-from src.mfvi_sampler import run_mfvi_experiment
+import pandas as pd
+from lfa import fit_lfa
 
-# Generate synthetic disease data
-W, z_true, beta_true, theta_true = simulate_topic_disease_data(
-    seed=42,
-    M=1000,      # Number of patients
-    D=20,        # Number of diseases  
-    K=3,         # Number of topics
-    topic_associated_prob=0.30,
-    nontopic_associated_prob=0.01
-)
+# Load your disease data (rows = patients, columns = diseases)
+# Values should be 0 (disease absent) or 1 (disease present)
+W = pd.read_csv('patient_disease_data.csv', index_col=0)
 
-# Run MFVI inference
-result, metrics = run_mfvi_experiment(
-    W=W,
-    alpha=np.ones(4) / 10,  # K+1 for healthy topic
-    num_topics=4,
-    beta=beta_true,
-    theta=theta_true,
+# Fit LFA model using MFVI (fast, scalable)
+result = fit_lfa(
+    W,
+    num_topics=5,           # Number of disease topics to discover
+    algorithm='mfvi',
     max_iterations=1000
 )
 
-print(f"Beta MAE: {metrics['beta_mae']:.4f}")
-print(f"Converged in {metrics['num_iterations']} iterations")
+# View summary of fitted model
+print(result.summary())
+
+# See which diseases define each topic
+top_diseases = result.get_top_diseases_per_topic(n=10)
+for topic, diseases in top_diseases.items():
+    print(f"\n{topic}:")
+    for disease, loading in diseases:
+        print(f"  {disease}: {loading:.3f}")
+```
+
+**Or try with synthetic data first:**
+```python
+from lfa import fit_lfa, simulate_topic_disease_data
+
+W, _, _, _ = simulate_topic_disease_data(seed=42, M=500, D=30, K=3)
+result = fit_lfa(W, num_topics=3, algorithm='mfvi')
+print(result.summary())
 ```
 
 ### Basic PCGS Example
 ```python
-from src.gibbs_sampler import run_cgs_experiment
+from lfa import fit_lfa
 
-# Run PCGS inference
-result, metrics = run_cgs_experiment(
-    W=W,
-    alpha=np.ones(4) / 10,
-    num_topics=4,
-    num_chains=3,           # Multiple chains for convergence
+# For smaller datasets (<500 patients), use PCGS for exact inference
+result = fit_lfa(
+    W,
+    num_topics=5,
+    algorithm='pcgs',
+    num_chains=3,           # Multiple chains for convergence diagnostics
     max_iterations=2000,
-    beta=beta_true,
-    theta=theta_true,
-    r_hat_threshold=1.1     # Convergence threshold
+    burn_in=1000
 )
 
-print(f"R-hat overall: {metrics['r_hat_overall']:.4f}")
-print(f"Converged: {metrics['converged']}")
+# Check convergence (R-hat < 1.1 indicates convergence)
+print(f"R-hat: {result.convergence_info['r_hat_overall']:.4f}")
+if result.convergence_info['r_hat_overall'] < 1.1:
+    print("✓ Converged!")
 ```
 
 
@@ -129,8 +137,39 @@ print(f"Converged: {metrics['converged']}")
 
 ### Model Parameters
 - **α (alpha)**: Dirichlet prior for topic proportions `(K,)`
-- **β (beta)**: Topic-disease probability matrix `(K, D)`  
+- **β (beta)**: Topic-disease probability matrix `(K, D)`
 - **θ (theta)**: Subject-topic proportions `(M, K)`
 - **z**: Topic assignments `(M, D)` (discrete) or `(M, D, K)` (probabilistic)
 
-**Note**: This README is actively being developed. Please open an issue to provide feedback.
+## References
+
+[1] Zhang, Y., Jiang, X., Mentzer, A.J., McVean, G., & Lunter, G. (2023). Topic modeling identifies novel genetic loci associated with multimorbidities in UK Biobank. *Cell Genomics*, 3(8), 100371. https://doi.org/10.1016/j.xgen.2023.100371
+
+## Citation
+
+If you use LFA in your research, please cite:
+
+```bibtex
+@software{marella2025lfa,
+  author = {Marella, Will},
+  title = {LFA: Latent Factor Allocation for Disease Topic Modeling},
+  year = {2025},
+  url = {https://github.com/will-marella/LFA}
+}
+```
+
+And the original methodology paper:
+
+```bibtex
+@article{zhang2023topic,
+  title={Topic modeling identifies novel genetic loci associated with multimorbidities in UK Biobank},
+  author={Zhang, Yidong and Jiang, Xilin and Mentzer, Alexander J and McVean, Gil and Lunter, Gerton},
+  journal={Cell Genomics},
+  volume={3},
+  number={8},
+  pages={100371},
+  year={2023},
+  publisher={Elsevier},
+  doi={10.1016/j.xgen.2023.100371}
+}
+```

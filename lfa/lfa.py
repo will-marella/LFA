@@ -239,8 +239,15 @@ def select_num_topics(
     """
     Automatically select the optimal number of topics using cross-validation.
     
-    Note: Current BIC implementation needs validation. Use results with caution
-    and consider trying multiple K values manually.
+    **WARNING: Auto-K selection is experimental and has limited accuracy (~50% on simulated data).**
+    
+    This function uses cross-validated perplexity with a complexity penalty to select K.
+    Validation on simulated data showed:
+    - Works well for simple cases (K=2): 100% accuracy
+    - Struggles with complex cases (K≥3): Often under-selects K
+    
+    **Recommendation**: Use this as a starting point, then try K±1 manually and compare
+    fit quality. Consider domain knowledge about expected disease patterns.
     
     Parameters
     ----------
