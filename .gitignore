@@ -37,4 +37,7 @@ dist/
 .ipynb_checkpoints/
 *.ipynb
 
+# Development files
 AGENTS.md
+AUTO_K_*.md
+*AUTO_K*.md
