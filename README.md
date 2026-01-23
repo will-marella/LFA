@@ -130,9 +130,6 @@ if result.convergence_info['r_hat_overall'] < 1.1:
       [0, 0, 1, 0, 0, 0, 0, 1],  # Patient 1: has diseases 2, 7  
       [1, 1, 0, 0, 1, 0, 0, 0]   # Patient 2: has diseases 0, 1, 4
   ])
-  
-  # Alternatively, you can set values using:
-  W[0, [1, 3, 5]] = 1  # Set multiple diseases for patient 0
   ```
 
 ### Model Parameters
